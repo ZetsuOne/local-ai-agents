@@ -272,18 +272,18 @@
       color: var(--muted); padding: 24px; text-align: center;
     }
     .code-view {
-      display: grid; grid-template-columns: auto 1fr;
+      display: grid; grid-template-columns: auto minmax(0, 1fr);
       font-family: var(--mono); font-size: 12px; line-height: 1.5;
-      min-height: 100%;
+      min-height: 100%; min-width: 0;
     }
     .line-nums {
       padding: 12px 8px 12px 12px; text-align: right; color: #484f58;
       user-select: none; border-right: 1px solid var(--border-soft);
-      background: #0d1117;
+      background: #0d1117; white-space: pre;
     }
     .line-code {
       padding: 12px 12px 12px 10px; white-space: pre; overflow-x: auto;
-      color: var(--text);
+      color: var(--text); min-width: 0;
     }
     .copy-btn { font-size: 12px; padding: 4px 8px; }
 
@@ -564,15 +564,22 @@
         for (const f of files) {
           const item = document.createElement("div");
           item.className = "tree-item" + (currentFile === f.path ? " active" : "");
+          item.dataset.path = f.path;
           item.textContent = "📄 " + f.path;
           item.title = f.path + " (" + f.size + " B)";
-          item.onclick = () => openFile(f.path);
           tree.appendChild(item);
         }
       } catch (e) {
         tree.innerHTML = '<div class="viewer-empty">ошибка загрузки</div>';
       }
     }
+
+    tree.addEventListener("click", (e) => {
+      const item = e.target.closest(".tree-item");
+      if (!item || !tree.contains(item)) return;
+      const path = item.dataset.path;
+      if (path) openFile(path);
+    });
 
     function fmtBackupStamp(stamp, mtime) {
       if (stamp && stamp.length >= 15) {
@@ -863,9 +870,15 @@
         return;
       }
       if (t === "workspace" || t === "workspace_cleaned") {
-        $("wsPath").textContent = ev.path || "";
-        refreshFiles();
-        refreshBackups();
+        const next = ev.path || "";
+        const prev = $("wsPath").textContent || "";
+        $("wsPath").textContent = next;
+        // workspace_cleaned — всегда обновить; workspace — только если путь сменился
+        // (иначе /api/files ↔ SSE зацикливаются и клики по дереву ломаются)
+        if (t === "workspace_cleaned" || next !== prev) {
+          refreshFiles();
+          refreshBackups();
+        }
       }
     }
 

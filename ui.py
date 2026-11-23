@@ -273,12 +273,15 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/files":
             try:
-                set_workspace(get_workspace())
+                # Не вызывать set_workspace() здесь: он шлёт SSE "workspace",
+                # а UI на это снова дергает /api/files → бесконечный цикл.
+                ws = get_workspace()
+                ws.mkdir(parents=True, exist_ok=True)
                 _send_json(
                     self,
                     200,
                     {
-                        "workspace": str(get_workspace()),
+                        "workspace": str(ws),
                         "files": list_workspace_tree(),
                     },
                 )

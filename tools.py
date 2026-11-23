@@ -41,9 +41,12 @@ def set_workspace(path: str | Path | None = None) -> Path:
     else:
         target = target.resolve()
     target.mkdir(parents=True, exist_ok=True)
+    changed = target != WORKSPACE_DIR.resolve()
     WORKSPACE_DIR = target
     SANDBOX_DIR = WORKSPACE_DIR
-    events.emit("workspace", path=str(WORKSPACE_DIR))
+    # Не спамить SSE при повторной установке того же пути (ломает Web-UI).
+    if changed:
+        events.emit("workspace", path=str(WORKSPACE_DIR))
     return WORKSPACE_DIR
 
 def is_default_workspace(path: str | Path | None = None) -> bool:
