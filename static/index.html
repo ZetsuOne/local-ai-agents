@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Local AI Agents</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg-elev: #161b22;
+      --bg-soft: #1c2128;
+      --border: #30363d;
+      --border-soft: #21262d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-dim: #1f6feb33;
+      --green: #3fb950;
+      --green-bg: #23863622;
+      --red: #f85149;
+      --red-bg: #da363322;
+      --yellow: #d29922;
+      --purple: #a371f7;
+      --cyan: #39c5cf;
+      --radius: 10px;
+      --font: "Segoe UI", "Cascadia Code", "Consolas", system-ui, sans-serif;
+      --mono: "Cascadia Code", "Consolas", "Courier New", monospace;
+      --shadow: 0 8px 24px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%;
+      background: radial-gradient(1200px 600px at 10% -10%, #1a2332 0%, transparent 55%),
+                  radial-gradient(900px 500px at 100% 0%, #141c2b 0%, transparent 50%),
+                  var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+    }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button {
+      cursor: pointer; border: 1px solid var(--border);
+      background: var(--bg-soft); color: var(--text);
+      border-radius: 8px; padding: 8px 14px;
+      transition: background .15s, border-color .15s, transform .1s;
+    }
+    button:hover { background: #2a313a; border-color: #484f58; }
+    button:active { transform: translateY(1px); }
+    button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    button.primary {
+      background: #238636; border-color: #2ea043; color: #fff; font-weight: 600;
+    }
+    button.primary:hover { background: #2ea043; }
+    button.danger {
+      background: #21262d; border-color: #f85149; color: #f85149;
+    }
+    button.danger:hover { background: #da363322; }
+    input[type="text"], textarea, select {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 10px; outline: none; width: 100%;
+    }
+    input[type="text"]:focus, textarea:focus, select:focus {
+      border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    textarea { resize: vertical; min-height: 72px; }
+
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+      max-height: 100vh;
+    }
+
+    /* Top bar */
+    .topbar {
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      background: rgba(22,27,34,.92); backdrop-filter: blur(8px);
+      position: sticky; top: 0; z-index: 20;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px; margin-right: 8px;
+      font-weight: 700; letter-spacing: .2px;
+    }
+    .brand .logo {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: linear-gradient(135deg, #58a6ff, #a371f7);
+      display: grid; place-items: center; font-size: 14px; color: #0d1117;
+      font-weight: 800;
+    }
+    .model-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 10px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--bg);
+      max-width: 280px;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted); flex-shrink: 0;
+    }
+    .dot.on { background: var(--green); box-shadow: 0 0 8px #3fb950aa; }
+    .dot.off { background: var(--red); }
+    .model-pill .name {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      color: var(--muted); font-family: var(--mono); font-size: 12px;
+    }
+    .controls {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center; flex: 1;
+    }
+    .field { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+    .field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .field.grow { flex: 1; min-width: 180px; }
+    .check {
+      display: flex; align-items: center; gap: 8px;
+      padding-top: 16px; color: var(--muted); font-size: 13px;
+      user-select: none;
+    }
+    .actions { display: flex; gap: 8px; padding-top: 16px; flex-wrap: wrap; }
+    .tokens {
+      margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted);
+      padding-top: 16px; white-space: nowrap;
+    }
+    button.ghost {
+      background: transparent; border-color: var(--border); color: var(--muted);
+      font-size: 12px; padding: 8px 12px;
+    }
+    button.ghost:hover { color: var(--text); border-color: #484f58; }
+    button.ghost.active-session {
+      border-color: var(--accent); color: var(--accent);
+    }
+    .presets {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;
+    }
+    button.preset {
+      font-size: 12px; padding: 4px 10px; border-radius: 999px;
+      background: var(--bg); color: var(--muted);
+    }
+    button.preset:hover { color: var(--accent); border-color: #58a6ff55; }
+
+    /* Main layout */
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      min-height: 0; height: 100%;
+    }
+    @media (max-width: 960px) {
+      .main { grid-template-columns: 1fr; grid-template-rows: 1fr 40vh; }
+    }
+
+    .feed-wrap {
+      display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border);
+    }
+    .task-row {
+      padding: 12px 16px; border-bottom: 1px solid var(--border-soft);
+      background: var(--bg-elev);
+    }
+    .feed {
+      flex: 1; overflow: auto; padding: 16px;
+      display: flex; flex-direction: column; gap: 12px;
+      scroll-behavior: smooth;
+    }
+    .feed:empty::before {
+      content: "Запустите задачу — здесь появится живой поток шагов";
+      color: var(--muted); margin: auto; text-align: center;
+    }
+
+    .card {
+      background: var(--bg-elev); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 14px;
+      box-shadow: var(--shadow); animation: rise .25s ease;
+    }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+    .card-head {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .icon {
+      width: 26px; height: 26px; border-radius: 7px;
+      display: grid; place-items: center; font-size: 13px; flex-shrink: 0;
+      background: var(--bg-soft); border: 1px solid var(--border);
+    }
+    .card-title { font-weight: 600; }
+    .card-meta { margin-left: auto; color: var(--muted); font-size: 12px; font-family: var(--mono); }
+    .card-body {
+      color: var(--text); white-space: pre-wrap; word-break: break-word;
+      font-family: var(--mono); font-size: 12.5px; line-height: 1.45;
+    }
+    .card.thought .icon { color: var(--cyan); border-color: #39c5cf44; }
+    .card.tool .icon { color: var(--yellow); border-color: #d2992244; }
+    .card.result .icon { color: var(--green); border-color: #3fb95044; }
+    .card.error .icon { color: var(--red); border-color: #f8514944; }
+    .card.final .icon { color: var(--purple); border-color: #a371f744; }
+    .card.tokens .icon { color: var(--accent); }
+    .card.step {
+      background: transparent; border-style: dashed; box-shadow: none;
+      padding: 6px 10px; color: var(--muted); font-size: 12px;
+    }
+
+    .diff-unified {
+      margin-top: 8px; border-radius: 8px; border: 1px solid var(--border);
+      overflow: auto; max-height: 280px; background: var(--bg);
+      font-family: var(--mono); font-size: 12px; line-height: 1.45;
+    }
+    .diff-unified .dline { padding: 1px 10px; white-space: pre-wrap; word-break: break-word; }
+    .diff-unified .d-add { background: var(--green-bg); color: var(--green); }
+    .diff-unified .d-del { background: var(--red-bg); color: var(--red); }
+    .diff-unified .d-hunk { color: var(--accent); background: var(--accent-dim); }
+    .diff-unified .d-meta { color: var(--muted); }
+    .diff-empty { color: var(--muted); padding: 8px 10px; font-style: italic; }
+
+    .step-hud {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 10px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg);
+      font-family: var(--mono); font-size: 12px; color: var(--muted);
+      white-space: nowrap;
+    }
+    .step-hud.active { color: var(--accent); border-color: #58a6ff55; }
+
+    /* Right panel */
+    .side {
+      display: grid; grid-template-rows: 1fr 1.1fr minmax(120px, 0.7fr);
+      min-height: 0; background: var(--bg-elev);
+    }
+    .panel {
+      display: flex; flex-direction: column; min-height: 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel:last-child { border-bottom: none; }
+    .backups {
+      flex: 1; overflow: auto; padding: 6px 8px;
+      font-family: var(--mono); font-size: 11.5px;
+    }
+    .backup-item {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 6px; align-items: center;
+      padding: 6px 8px; border-radius: 6px;
+      border: 1px solid transparent;
+    }
+    .backup-item:hover { background: var(--bg-soft); border-color: var(--border-soft); }
+    .backup-meta { color: var(--muted); overflow: hidden; }
+    .backup-meta .orig { color: var(--text); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .backup-meta .stamp { font-size: 10.5px; }
+    .backup-item button {
+      font-size: 11px; padding: 4px 8px; white-space: nowrap;
+    }
+    .panel-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px; border-bottom: 1px solid var(--border-soft);
+      font-weight: 600; font-size: 13px;
+    }
+    .panel-head span.muted { color: var(--muted); font-weight: 400; font-size: 11px; }
+    .tree {
+      flex: 1; overflow: auto; padding: 8px;
+      font-family: var(--mono); font-size: 12px;
+    }
+    .tree-item {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 8px; border-radius: 6px; cursor: pointer;
+      color: var(--muted);
+    }
+    .tree-item:hover { background: var(--bg-soft); color: var(--text); }
+    .tree-item.active { background: var(--accent-dim); color: var(--accent); }
+    .tree-item.dir { cursor: default; color: var(--text); font-weight: 600; }
+    .viewer {
+      flex: 1; overflow: auto; position: relative;
+      background: var(--bg);
+    }
+    .viewer-empty {
+      color: var(--muted); padding: 24px; text-align: center;
+    }
+    .code-view {
+      display: grid; grid-template-columns: auto 1fr;
+      font-family: var(--mono); font-size: 12px; line-height: 1.5;
+      min-height: 100%;
+    }
+    .line-nums {
+      padding: 12px 8px 12px 12px; text-align: right; color: #484f58;
+      user-select: none; border-right: 1px solid var(--border-soft);
+      background: #0d1117;
+    }
+    .line-code {
+      padding: 12px 12px 12px 10px; white-space: pre; overflow-x: auto;
+      color: var(--text);
+    }
+    .copy-btn { font-size: 12px; padding: 4px 8px; }
+
+    .status-bar {
+      padding: 6px 16px; border-top: 1px solid var(--border);
+      color: var(--muted); font-size: 12px;
+      display: flex; gap: 16px; background: var(--bg-elev);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">LA</div>
+        <div>Local AI Agents</div>
+      </div>
+      <div class="model-pill" title="Активная модель LM Studio">
+        <span class="dot" id="modelDot"></span>
+        <span class="name" id="modelName">подключение…</span>
+      </div>
+      <div class="controls">
+        <div class="field">
+          <label>Режим</label>
+          <select id="mode">
+            <option value="agent">Agent</option>
+            <option value="workflow">Workflow</option>
+            <option value="multi_agent">Multi-Agent</option>
+          </select>
+        </div>
+        <div class="field grow">
+          <label>Workspace</label>
+          <input type="text" id="workspace" value="./sandbox" />
+        </div>
+        <div class="field grow">
+          <label>API Base URL</label>
+          <input type="text" id="baseUrl" value="http://localhost:1234/v1" placeholder="http://localhost:1234/v1" />
+        </div>
+        <div class="field" style="min-width:90px">
+          <label>Max steps</label>
+          <input type="text" id="maxSteps" value="12" />
+        </div>
+        <label class="check">
+          <input type="checkbox" id="clean" />
+          Очистить sandbox перед стартом
+        </label>
+        <div class="actions">
+          <button class="primary" id="btnRun">Запустить</button>
+          <button class="danger" id="btnStop" disabled>Остановить</button>
+          <button class="ghost" id="btnNewSession" title="Очистить историю диалога Agent">Новый сеанс</button>
+        </div>
+        <div class="step-hud" id="stepHud" title="Прогресс шагов">Шаг — / —</div>
+        <div class="tokens" id="tokenHud">tokens: 0 / 0</div>
+      </div>
+    </header>
+
+    <div class="main">
+      <section class="feed-wrap">
+        <div class="task-row">
+          <div class="field">
+            <label>Задача <span class="muted" id="sessionHint" style="text-transform:none;letter-spacing:0;font-weight:400"></span></label>
+            <div class="presets" id="presets">
+              <button type="button" class="preset" data-preset="script">Скрипт + тесты</button>
+              <button type="button" class="preset" data-preset="refactor">Рефакторинг файла</button>
+              <button type="button" class="preset" data-preset="sqlite">Анализ SQLite</button>
+            </div>
+            <textarea id="task" placeholder="Опиши задачу для агента…"></textarea>
+          </div>
+        </div>
+        <div class="feed" id="feed"></div>
+        <div class="status-bar">
+          <span id="connStatus">SSE: …</span>
+          <span id="runStatus">idle</span>
+          <span id="wsPath"></span>
+        </div>
+      </section>
+
+      <aside class="side">
+        <div class="panel">
+          <div class="panel-head">
+            Файлы
+            <span class="muted" id="fileCount">0</span>
+          </div>
+          <div class="tree" id="tree"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <span id="viewerTitle">Просмотр</span>
+            <button class="copy-btn" id="btnCopy" disabled>Копировать</button>
+          </div>
+          <div class="viewer" id="viewer">
+            <div class="viewer-empty">Выберите файл в дереве</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            Бэкапы
+            <span class="muted" id="backupCount">0</span>
+          </div>
+          <div class="backups" id="backups">
+            <div class="viewer-empty">нет сохранённых версий</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const feed = $("feed");
+    const tree = $("tree");
+    const viewer = $("viewer");
+    const backupsEl = $("backups");
+    let currentFile = null;
+    let currentContent = "";
+    let autoScroll = true;
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let lastThoughtKey = null;
+    let lastToolName = null;
+    let currentStep = 0;
+    let currentMaxSteps = 12;
+    let sessionActive = false;
+    const runStart = { t: 0 };
+
+    const PRESETS = {
+      script:
+        "Напиши Python-скрипт по задаче ниже и рядом файл тестов (test_*.py). " +
+        "Прогони тесты через run_python и кратко опиши результат.\n\nЗадача: ",
+      refactor:
+        "Открой указанный файл, кратко опиши структуру (get_file_outline / read_file), " +
+        "предложи и выполни аккуратный рефакторинг через replace_lines/edit_file, " +
+        "затем проверь run_python.\n\nФайл: ",
+      sqlite:
+        "Найди SQLite-базу в workspace, через sqlite_query изучи схему (PRAGMA table_info / SELECT) " +
+        "и кратко опиши таблицы, связи и пример данных.\n\nБаза (если известна): ",
+    };
+
+    function fmtTime(ts) {
+      const d = new Date((ts || Date.now() / 1000) * 1000);
+      return d.toLocaleTimeString("ru-RU", { hour12: false });
+    }
+
+    function elapsed() {
+      if (!runStart.t) return "";
+      const ms = Date.now() - runStart.t;
+      return (ms / 1000).toFixed(1) + "s";
+    }
+
+    function esc(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function short(s, n = 4000) {
+      s = String(s ?? "");
+      return s.length > n ? s.slice(0, n) + "\n… [" + s.length + " chars]" : s;
+    }
+
+    function getBaseUrl() {
+      return ($("baseUrl").value || "").trim() || "http://localhost:1234/v1";
+    }
+
+    function updateStepHud(step, maxSteps) {
+      if (step != null) currentStep = step;
+      if (maxSteps != null) currentMaxSteps = maxSteps;
+      const hud = $("stepHud");
+      const label = "Шаг " + (currentStep || "—") + " / " + (currentMaxSteps || "—");
+      hud.textContent = label;
+      hud.classList.toggle("active", !!runStart.t && $("btnStop").disabled === false);
+    }
+
+    function addCard(opts) {
+      const el = document.createElement("div");
+      el.className = "card " + (opts.cls || "");
+      if (opts.cls === "step") {
+        el.textContent = opts.title || "";
+        feed.appendChild(el);
+        if (autoScroll) feed.scrollTop = feed.scrollHeight;
+        return el;
+      }
+      el.innerHTML =
+        '<div class="card-head">' +
+          '<div class="icon">' + (opts.icon || "•") + "</div>" +
+          '<div class="card-title">' + esc(opts.title || "") + "</div>" +
+          '<div class="card-meta">' + esc(opts.meta || fmtTime(opts.ts)) + "</div>" +
+        "</div>" +
+        (opts.bodyHtml
+          ? '<div class="card-body">' + opts.bodyHtml + "</div>"
+          : opts.body
+            ? '<div class="card-body">' + esc(opts.body) + "</div>"
+            : "");
+      feed.appendChild(el);
+      if (autoScroll) feed.scrollTop = feed.scrollHeight;
+      return el;
+    }
+
+    function makeUnifiedDiffHtml(diffText) {
+      const raw = String(diffText || "").trim();
+      if (!raw) {
+        return '<div class="diff-unified"><div class="diff-empty">(нет изменений)</div></div>';
+      }
+      const lines = short(raw, 8000).split("\n");
+      let html = '<div class="diff-unified">';
+      for (const line of lines) {
+        let cls = "d-meta";
+        if (line.startsWith("+++") || line.startsWith("---")) cls = "d-meta";
+        else if (line.startsWith("@@")) cls = "d-hunk";
+        else if (line.startsWith("+")) cls = "d-add";
+        else if (line.startsWith("-")) cls = "d-del";
+        else cls = "d-meta";
+        html += '<div class="dline ' + cls + '">' + esc(line) + "</div>";
+      }
+      html += "</div>";
+      return html;
+    }
+
+    function updateTokens() {
+      $("tokenHud").textContent =
+        "tokens: " + promptTokens + " / " + completionTokens;
+    }
+
+    function setRunning(on) {
+      $("btnRun").disabled = !!on;
+      $("btnStop").disabled = !on;
+      $("btnNewSession").disabled = !!on;
+      $("runStatus").textContent = on ? "running…" : "idle";
+      $("stepHud").classList.toggle("active", !!on);
+    }
+
+    function updateSessionHint(info) {
+      if (info && typeof info.active === "boolean") sessionActive = info.active;
+      const hint = $("sessionHint");
+      const btn = $("btnNewSession");
+      if (sessionActive) {
+        const n = (info && info.messages) || "";
+        hint.textContent = n ? "(сеанс · " + n + " msg — уточнение продолжит диалог)" : "(сеанс активен)";
+        btn.classList.add("active-session");
+      } else {
+        hint.textContent = "";
+        btn.classList.remove("active-session");
+      }
+    }
+
+    async function refreshModel() {
+      try {
+        const base = encodeURIComponent(getBaseUrl());
+        const r = await fetch("/api/model?base_url=" + base);
+        const data = await r.json();
+        const dot = $("modelDot");
+        if (data.ok && data.model) {
+          $("modelName").textContent = data.model;
+          dot.className = "dot on";
+        } else {
+          $("modelName").textContent = data.error || "шлюз недоступен";
+          dot.className = "dot off";
+        }
+      } catch (e) {
+        $("modelName").textContent = "нет связи";
+        $("modelDot").className = "dot off";
+      }
+    }
+
+    async function refreshFiles() {
+      try {
+        const r = await fetch("/api/files");
+        const data = await r.json();
+        const files = (data.files || []).filter((f) => !f.is_dir);
+        $("fileCount").textContent = String(files.length);
+        $("wsPath").textContent = data.workspace || "";
+        tree.innerHTML = "";
+        if (!files.length) {
+          tree.innerHTML = '<div class="viewer-empty">пусто</div>';
+          return;
+        }
+        for (const f of files) {
+          const item = document.createElement("div");
+          item.className = "tree-item" + (currentFile === f.path ? " active" : "");
+          item.textContent = "📄 " + f.path;
+          item.title = f.path + " (" + f.size + " B)";
+          item.onclick = () => openFile(f.path);
+          tree.appendChild(item);
+        }
+      } catch (e) {
+        tree.innerHTML = '<div class="viewer-empty">ошибка загрузки</div>';
+      }
+    }
+
+    function fmtBackupStamp(stamp, mtime) {
+      if (stamp && stamp.length >= 15) {
+        return stamp.slice(0, 4) + "-" + stamp.slice(4, 6) + "-" + stamp.slice(6, 8) +
+          " " + stamp.slice(9, 11) + ":" + stamp.slice(11, 13) + ":" + stamp.slice(13, 15);
+      }
+      if (mtime) return fmtTime(mtime);
+      return "";
+    }
+
+    async function refreshBackups() {
+      try {
+        const r = await fetch("/api/backups");
+        const data = await r.json();
+        const list = data.backups || [];
+        $("backupCount").textContent = String(list.length);
+        backupsEl.innerHTML = "";
+        if (!list.length) {
+          backupsEl.innerHTML = '<div class="viewer-empty">нет сохранённых версий</div>';
+          return;
+        }
+        for (const b of list) {
+          const row = document.createElement("div");
+          row.className = "backup-item";
+          const meta = document.createElement("div");
+          meta.className = "backup-meta";
+          meta.innerHTML =
+            '<span class="orig" title="' + esc(b.name) + '">' + esc(b.original || b.name) + "</span>" +
+            '<span class="stamp">' + esc(fmtBackupStamp(b.stamp, b.mtime)) +
+            (b.size != null ? " · " + b.size + " B" : "") + "</span>";
+          const btn = document.createElement("button");
+          btn.textContent = "Откатить";
+          btn.title = "Восстановить " + (b.original || "") + " из " + b.name;
+          btn.onclick = () => rollbackBackup(b.name);
+          row.appendChild(meta);
+          row.appendChild(btn);
+          backupsEl.appendChild(row);
+        }
+      } catch (e) {
+        backupsEl.innerHTML = '<div class="viewer-empty">ошибка загрузки</div>';
+      }
+    }
+
+    async function rollbackBackup(name) {
+      if (!name) return;
+      if (!confirm("Откатить файл к версии\n" + name + "?\nТекущая версия будет сохранена в бэкап.")) {
+        return;
+      }
+      try {
+        const r = await fetch("/api/rollback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ backup: name }),
+        });
+        const data = await r.json();
+        if (!data.ok) {
+          addCard({ cls: "error", icon: "⚠", title: "Rollback", body: data.error || "ошибка" });
+          return;
+        }
+        addCard({
+          cls: "result",
+          icon: "⏪",
+          title: "Rollback · " + (data.restored || ""),
+          body: data.message || "OK",
+        });
+        refreshFiles();
+        refreshBackups();
+        if (data.restored) openFile(data.restored);
+      } catch (e) {
+        addCard({ cls: "error", icon: "⚠", title: "Rollback", body: String(e) });
+      }
+    }
+
+    async function openFile(path) {
+      currentFile = path;
+      $("viewerTitle").textContent = path;
+      try {
+        const r = await fetch("/api/file?path=" + encodeURIComponent(path));
+        const data = await r.json();
+        if (data.error) {
+          viewer.innerHTML = '<div class="viewer-empty">' + esc(data.error) + "</div>";
+          $("btnCopy").disabled = true;
+          return;
+        }
+        currentContent = data.content || "";
+        const lines = currentContent.split("\n");
+        const nums = lines.map((_, i) => (i + 1)).join("\n");
+        viewer.innerHTML =
+          '<div class="code-view">' +
+            '<div class="line-nums">' + esc(nums) + "</div>" +
+            '<div class="line-code">' + esc(currentContent) + "</div>" +
+          "</div>";
+        $("btnCopy").disabled = false;
+        [...tree.querySelectorAll(".tree-item")].forEach((el) => {
+          el.classList.toggle("active", el.textContent.includes(path));
+        });
+      } catch (e) {
+        viewer.innerHTML = '<div class="viewer-empty">не удалось открыть</div>';
+      }
+    }
+
+    $("btnCopy").onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(currentContent);
+        $("btnCopy").textContent = "Скопировано";
+        setTimeout(() => ($("btnCopy").textContent = "Копировать"), 1200);
+      } catch (_) {
+        $("btnCopy").textContent = "Ошибка";
+      }
+    };
+
+    function handleEvent(ev) {
+      const t = ev.type;
+      const meta = (elapsed() ? elapsed() + " · " : "") + fmtTime(ev.ts);
+
+      if (t === "hello" || t === "status") {
+        if (typeof ev.running === "boolean") setRunning(ev.running);
+        if (ev.workspace) $("wsPath").textContent = ev.workspace;
+        if (ev.session) updateSessionHint(ev.session);
+        return;
+      }
+      if (t === "model") {
+        $("modelName").textContent = ev.id || "—";
+        $("modelDot").className = "dot on";
+        return;
+      }
+      if (t === "run_start") {
+        if (!ev.follow_up) {
+          feed.innerHTML = "";
+          promptTokens = 0;
+          completionTokens = 0;
+          lastThoughtKey = null;
+        }
+        runStart.t = Date.now();
+        lastToolName = null;
+        currentStep = 0;
+        if (ev.max_steps) currentMaxSteps = ev.max_steps;
+        updateTokens();
+        updateStepHud(0, currentMaxSteps);
+        setRunning(true);
+        addCard({
+          cls: "step",
+          title: (ev.follow_up ? "↩ Follow-up · " : "▶ ") +
+            (ev.mode || "run") + " · " + short(ev.task || "", 120),
+        });
+        return;
+      }
+      if (t === "session") {
+        updateSessionHint(ev);
+        return;
+      }
+      if (t === "step") {
+        updateStepHud(ev.step, ev.max_steps || currentMaxSteps);
+        const label = ev.label || ("Шаг " + (ev.step || "?") +
+          (ev.max_steps ? "/" + ev.max_steps : "") +
+          (ev.agent ? " · " + ev.agent : ""));
+        addCard({ cls: "step", title: "—— " + label + " ——" });
+        return;
+      }
+      if (t === "agent_role") {
+        addCard({
+          cls: "step",
+          title: "▶ Роль: " + (ev.name || "") + " [" + (ev.tools || []).join(", ") + "]",
+        });
+        return;
+      }
+      if (t === "thought") {
+        const key = (ev.agent || "") + "::" + String(ev.content || "").trim();
+        if (key && key === lastThoughtKey) return;
+        lastThoughtKey = key;
+        addCard({
+          cls: "thought",
+          icon: "💭",
+          title: "Thought" + (ev.agent ? " · " + ev.agent : ""),
+          body: short(ev.content, 2000),
+          meta,
+        });
+        return;
+      }
+      if (t === "tool_call") {
+        lastToolName = ev.name || null;
+        addCard({
+          cls: "tool",
+          icon: "🔧",
+          title: "Tool · " + (ev.name || "?"),
+          body: short(JSON.stringify(ev.args || {}, null, 2), 2000),
+          meta,
+        });
+        return;
+      }
+      if (t === "tool_result") {
+        // run_python уже отрисован красивой карточкой — не дублируем сырой JSON
+        if (lastToolName === "run_python") {
+          lastToolName = null;
+          return;
+        }
+        lastToolName = null;
+        addCard({
+          cls: "result",
+          icon: "✅",
+          title: "Result",
+          body: short(ev.result, 2500),
+          meta,
+        });
+        return;
+      }
+      if (t === "file_change") {
+        addCard({
+          cls: "result",
+          icon: "📝",
+          title: "Diff · " + (ev.filename || "") + " (" + (ev.action || "") + ")",
+          bodyHtml: makeUnifiedDiffHtml(ev.diff),
+          meta,
+        });
+        refreshFiles();
+        refreshBackups();
+        if (currentFile && currentFile === ev.filename) openFile(ev.filename);
+        return;
+      }
+      if (t === "files_changed") {
+        refreshFiles();
+        refreshBackups();
+        return;
+      }
+      if (t === "run_python") {
+        const res = ev.result || {};
+        const ok = res.returncode === 0;
+        addCard({
+          cls: ok ? "result" : "error",
+          icon: ok ? "▶️" : "💥",
+          title: "run_python · " + (ev.filename || "") + " → " + res.returncode,
+          body: short(
+            (res.stdout ? "stdout:\n" + res.stdout + "\n" : "") +
+            (res.stderr ? "stderr:\n" + res.stderr : ""),
+            3000
+          ),
+          meta,
+        });
+        return;
+      }
+      if (t === "tokens") {
+        if (ev.total_prompt != null) promptTokens = ev.total_prompt;
+        if (ev.total_completion != null) completionTokens = ev.total_completion;
+        updateTokens();
+        addCard({
+          cls: "tokens",
+          icon: "Σ",
+          title: "Tokens",
+          body:
+            "prompt +" + (ev.prompt_tokens ?? 0) +
+            ", completion +" + (ev.completion_tokens ?? 0) +
+            "  |  total " + promptTokens + " / " + completionTokens,
+          meta,
+        });
+        return;
+      }
+      if (t === "final") {
+        addCard({
+          cls: "final",
+          icon: "🏁",
+          title: "Final" + (ev.agent ? " · " + ev.agent : ""),
+          body: short(ev.content, 4000),
+          meta,
+        });
+        return;
+      }
+      if (t === "error") {
+        addCard({
+          cls: "error",
+          icon: "⚠",
+          title: "Error",
+          body: short(ev.message || "", 2000),
+          meta,
+        });
+        return;
+      }
+      if (t === "run_end" || t === "stopped") {
+        setRunning(false);
+        addCard({
+          cls: "step",
+          title: "■ Завершено (" + (ev.status || ev.type) + ")" +
+            (ev.code != null ? " code=" + ev.code : ""),
+        });
+        refreshFiles();
+        refreshBackups();
+        refreshModel();
+        refreshSession();
+        return;
+      }
+      if (t === "workspace" || t === "workspace_cleaned") {
+        $("wsPath").textContent = ev.path || "";
+        refreshFiles();
+        refreshBackups();
+      }
+    }
+
+    async function refreshSession() {
+      try {
+        const r = await fetch("/api/session");
+        const data = await r.json();
+        updateSessionHint(data);
+      } catch (_) {}
+    }
+
+    function connectSSE() {
+      const es = new EventSource("/api/events");
+      es.onopen = () => { $("connStatus").textContent = "SSE: connected"; };
+      es.onerror = () => { $("connStatus").textContent = "SSE: reconnecting…"; };
+      es.onmessage = (msg) => {
+        try {
+          handleEvent(JSON.parse(msg.data));
+        } catch (_) {}
+      };
+    }
+
+    $("presets").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-preset]");
+      if (!btn) return;
+      const key = btn.getAttribute("data-preset");
+      const text = PRESETS[key];
+      if (!text) return;
+      const ta = $("task");
+      ta.value = text;
+      ta.focus();
+      const pos = ta.value.length;
+      ta.setSelectionRange(pos, pos);
+    });
+
+    $("btnRun").onclick = async () => {
+      const task = $("task").value.trim();
+      if (!task) {
+        $("task").focus();
+        return;
+      }
+      const maxSteps = parseInt($("maxSteps").value, 10) || 12;
+      currentMaxSteps = maxSteps;
+      updateStepHud(0, maxSteps);
+      const payload = {
+        mode: $("mode").value,
+        task,
+        workspace: $("workspace").value.trim() || "./sandbox",
+        clean: $("clean").checked,
+        max_steps: maxSteps,
+        base_url: getBaseUrl(),
+      };
+      setRunning(true);
+      try {
+        const r = await fetch("/api/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await r.json();
+        if (!data.ok) {
+          setRunning(false);
+          addCard({ cls: "error", icon: "⚠", title: "Не запущено", body: data.error || r.statusText });
+        } else {
+          $("task").value = "";
+        }
+      } catch (e) {
+        setRunning(false);
+        addCard({ cls: "error", icon: "⚠", title: "Сеть", body: String(e) });
+      }
+    };
+
+    $("btnNewSession").onclick = async () => {
+      try {
+        const r = await fetch("/api/session/reset", { method: "POST" });
+        const data = await r.json();
+        updateSessionHint(data);
+        feed.innerHTML = "";
+        addCard({ cls: "step", title: "■ Новый сеанс — история диалога очищена" });
+      } catch (e) {
+        addCard({ cls: "error", icon: "⚠", title: "Сеанс", body: String(e) });
+      }
+    };
+
+    $("baseUrl").addEventListener("change", () => refreshModel());
+
+    $("btnStop").onclick = async () => {
+      try {
+        await fetch("/api/stop", { method: "POST" });
+      } catch (_) {}
+    };
+
+    $("workspace").addEventListener("change", async () => {
+      try {
+        await fetch("/api/workspace", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workspace: $("workspace").value.trim() }),
+        });
+        refreshFiles();
+        refreshBackups();
+      } catch (_) {}
+    });
+
+    feed.addEventListener("scroll", () => {
+      const nearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+      autoScroll = nearBottom;
+    });
+
+    refreshModel();
+    refreshFiles();
+    refreshBackups();
+    refreshSession();
+    connectSSE();
+    setInterval(refreshModel, 15000);
+  </script>
+</body>
+</html>
