@@ -1,17 +1,23 @@
+English | [Русский](README_RU.md)
+
 # local-ai-agents
 
-Учебно-боевой стенд на чистом Python + `openai` для локальных моделей **12B–30B** в LM Studio и любых OpenAI-совместимых шлюзов (`LLM_BASE_URL`).
+![Web-UI Preview](docs/ui_preview.png)
 
-Три режима без LangChain / LlamaIndex / CrewAI + локальный Web-UI:
+A pure-Python + `openai` training/lab bench for local **12B–30B** models in LM Studio and any OpenAI-compatible gateway (`LLM_BASE_URL`).
 
-| Режим | Файл | Паттерн |
-|-------|------|---------|
-| Workflow | `workflow.py` | Evaluator-Optimizer (генератор → запуск → критик) |
-| Agent | `agent.py` | Автономный ReAct + Tool Calling |
-| Multi-Agent | `multi_agent.py` | Архитектор → Кодер ↔ Ревьюер |
-| Web-UI | `ui.py` + `static/index.html` | Тёмный офлайн-интерфейс (SSE) |
+Three modes without LangChain / LlamaIndex / CrewAI, plus a local Web UI:
 
-## Установка
+| Mode | File | Pattern |
+|------|------|---------|
+| Workflow | `workflow.py` | Evaluator-Optimizer (generator → run → critic) |
+| Agent | `agent.py` | Autonomous ReAct + Tool Calling |
+| Multi-Agent | `multi_agent.py` | Architect → Coder ↔ Reviewer |
+| Web-UI | `ui.py` + `static/index.html` | Dark offline UI (SSE) |
+
+## Installation
+
+**Windows (PowerShell):**
 
 ```powershell
 cd C:\Projects\local-ai-agents
@@ -20,34 +26,49 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-В LM Studio запусти локальный сервер (порт `1234`) и загрузи **одну** чат-модель (embedding-модели игнорируются).
+**Linux / macOS (bash):**
 
-## Быстрый старт (Web-UI)
+```bash
+cd /path/to/local-ai-agents
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-Двойной клик по `start_ui.bat` — или:
+In LM Studio, start the local server (port `1234`) and load **one** chat model (embedding models are ignored).
+
+## Quick start (Web-UI)
+
+Double-click `start_ui.bat`, or:
 
 ```powershell
 .\.venv\Scripts\python.exe ui.py
 ```
 
-Откроется `http://localhost:8080` (флаг `--no-browser` отключает автозапуск браузера). В шапке: индикатор модели, режим (`Agent` / `Workflow` / `Multi-Agent`), `Workspace`, необязательное поле **API Base URL**, `Max steps`, чекбокс очистки sandbox, индикатор **Шаг X / max_steps**, кнопки **Запустить** / **Остановить** / **Новый сеанс**.
+```bash
+.venv/bin/python ui.py
+```
 
-Центральная лента получает шаги по SSE (Thought, tool calls, unified diff `+`/`−`, карточка `run_python` со stdout/stderr без дубля сырого JSON, токены). Над полем задачи — три пресета шаблонов («Скрипт + тесты», «Рефакторинг файла», «Анализ SQLite»). В режиме **Agent** история `messages` сохраняется между запусками: после завершения можно отправить уточнение (follow-up) в том же контексте; **Новый сеанс** очищает историю.
+Opens `http://localhost:8080` (`--no-browser` skips auto-opening the browser). Header controls: model indicator, mode (`Agent` / `Workflow` / `Multi-Agent`), `Workspace`, optional **API Base URL**, `Max steps`, sandbox clean checkbox, **Step X / max_steps** indicator, and **Run** / **Stop** / **New session** buttons.
 
-Справа — дерево файлов workspace, просмотрщик с нумерацией строк и блок **Бэкапы** (список версий из `.agent_backup/` + кнопка **Откатить**). Ход работы также пишется в `agent_runs.log`.
+The center feed streams steps over SSE (Thought, tool calls, unified diff `+`/`−`, `run_python` cards with stdout/stderr without raw JSON duplication, tokens). Above the task field are three template presets (“Script + tests”, “Refactor a file”, “SQLite analysis”). In **Agent** mode, the `messages` history is kept between runs so you can send a follow-up in the same context; **New session** clears history.
 
-## ИИ-шлюзы / OpenRouter
+On the right: workspace file tree, line-numbered viewer, and **Backups** (versions from `.agent_backup/` + **Rollback**). Runs are also logged to `agent_runs.log`.
 
-Клиент OpenAI-совместимый. Провайдер переключается переменными окружения (или полем **API Base URL** в UI / флагами `--base-url` / `--api-key`):
+## AI gateways / OpenRouter
 
-| Переменная | По умолчанию | Назначение |
-|------------|--------------|------------|
-| `LLM_BASE_URL` | `http://localhost:1234/v1` | Базовый URL шлюза |
-| `LLM_API_KEY` | `lm-studio` | API-ключ (для локального LM Studio достаточно заглушки) |
-| `LLM_MODEL` | *(пусто)* | Явная модель; если не задана — `client.models.list()` |
+The client is OpenAI-compatible. Switch providers via environment variables (or the **API Base URL** field in the UI / `--base-url` / `--api-key` flags):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LLM_BASE_URL` | `http://localhost:1234/v1` | Gateway base URL |
+| `LLM_API_KEY` | `lm-studio` | API key (a placeholder is enough for local LM Studio) |
+| `LLM_MODEL` | *(empty)* | Explicit model; if unset — `client.models.list()` |
+
+**Windows (PowerShell):**
 
 ```powershell
-# Локальный LM Studio (по умолчанию)
+# Local LM Studio (default)
 .\.venv\Scripts\python.exe agent.py --task "..."
 
 # OpenRouter
@@ -56,137 +77,189 @@ $env:LLM_API_KEY = "sk-or-..."
 $env:LLM_MODEL = "openai/gpt-4o-mini"
 .\.venv\Scripts\python.exe agent.py --task "..."
 
-# Или через флаги
+# Or via flags
 .\.venv\Scripts\python.exe agent.py --base-url "https://openrouter.ai/api/v1" --api-key "sk-or-..." --model "openai/gpt-4o-mini" --task "..."
 ```
 
-Запросы к API обёрнуты в retry: до 3 повторов с задержками 1с → 2с → 4с при сетевых сбоях и HTTP 429/502/503.
+**Linux / macOS (bash):**
+
+```bash
+# Local LM Studio (default)
+.venv/bin/python agent.py --task "..."
+
+# OpenRouter
+export LLM_BASE_URL="https://openrouter.ai/api/v1"
+export LLM_API_KEY="sk-or-..."
+export LLM_MODEL="openai/gpt-4o-mini"
+.venv/bin/python agent.py --task "..."
+
+# Or via flags
+.venv/bin/python agent.py --base-url "https://openrouter.ai/api/v1" --api-key "sk-or-..." --model "openai/gpt-4o-mini" --task "..."
+```
+
+API calls use retry: up to 3 attempts with delays 1s → 2s → 4s on network failures and HTTP 429/502/503.
 
 ## Docker
 
-Нужен Docker Desktop. LM Studio (или другой шлюз) должен слушать на хосте (`1234`). Контейнер ходит к нему через `host.docker.internal`.
+Requires Docker Desktop. LM Studio (or another gateway) must listen on the host (`1234`). The container reaches it via `host.docker.internal`.
 
 ```powershell
 docker compose up --build
 ```
 
-UI: `http://localhost:8080`. Каталог `./sandbox` проброшен в контейнер.
+```bash
+docker compose up --build
+```
+
+UI: `http://localhost:8080`. The `./sandbox` directory is mounted into the container.
 
 ```powershell
-# только образ
+# image only
 docker build -t local-ai-agents .
 docker run --rm -p 8080:8080 --add-host=host.docker.internal:host-gateway -e LLM_BASE_URL=http://host.docker.internal:1234/v1 -v ${PWD}/sandbox:/app/sandbox local-ai-agents
 ```
 
-## Структура
+```bash
+# image only
+docker build -t local-ai-agents .
+docker run --rm -p 8080:8080 --add-host=host.docker.internal:host-gateway -e LLM_BASE_URL=http://host.docker.internal:1234/v1 -v "$PWD/sandbox:/app/sandbox" local-ai-agents
+```
 
-| Файл | Назначение |
-|------|------------|
-| `llm.py` | Клиент шлюза, env-конфиг, retry, logging → `agent_runs.log`, сжатие контекста, loop-guard |
-| `tools.py` | Workspace + бэкапы/rollback + `ast.parse` / `get_file_outline` + 10 инструментов |
-| `events.py` | Шина событий для CLI, SSE и дедупа Thought |
-| `workflow.py` | Детерминированный цикл генератор → запуск → критик (до 3 правок) |
-| `agent.py` | Автономный ReAct-агент с tool calling + финальный отчёт при max_steps |
-| `multi_agent.py` | Пайплайн из 3 ролей с ограниченными тулами |
-| `ui.py` | `ThreadingHTTPServer` + SSE API на порту `8080` (сессия, бэкапы) |
-| `static/index.html` | Офлайн UI (без CDN) |
-| `Dockerfile` / `docker-compose.yml` | Упаковка Web-UI |
-| `start_ui.bat` | Запуск UI в один клик |
+## Layout
 
-## Workspace, `--clean` и авто-бэкапы
+| File | Purpose |
+|------|---------|
+| `llm.py` | Gateway client, env config, retry, logging → `agent_runs.log`, context compression, loop-guard |
+| `tools.py` | Workspace + backups/rollback + `ast.parse` / `get_file_outline` + 10 tools |
+| `events.py` | Event bus for CLI, SSE, and Thought dedup |
+| `workflow.py` | Deterministic generator → run → critic loop (up to 3 edits) |
+| `agent.py` | Autonomous ReAct agent with tool calling + final report at max_steps |
+| `multi_agent.py` | 3-role pipeline with restricted tools |
+| `ui.py` | `ThreadingHTTPServer` + SSE API on port `8080` (session, backups) |
+| `static/index.html` | Offline UI (no CDN) |
+| `Dockerfile` / `docker-compose.yml` | Web-UI packaging |
+| `start_ui.bat` | One-click UI launch |
 
-Рабочая папка задаётся через `set_workspace()` / флаг `--workspace` (по умолчанию `./sandbox`). Все пути инструментов проверяются строго внутри активной `WORKSPACE_DIR`.
+## Workspace, `--clean`, and auto-backups
+
+The working directory is set via `set_workspace()` / `--workspace` (default `./sandbox`). All tool paths are enforced strictly inside the active `WORKSPACE_DIR`.
 
 ```powershell
 .\.venv\Scripts\python.exe agent.py --workspace ./sandbox --task "..."
 .\.venv\Scripts\python.exe workflow.py --workspace D:\my-project --task "..."
-.\.venv\Scripts\python.exe multi_agent.py --clean --task "..."   # только для ./sandbox
+.\.venv\Scripts\python.exe multi_agent.py --clean --task "..."   # ./sandbox only
 ```
 
-- `--clean` очищает **только** дефолтный `./sandbox` перед задачей (для другого `--workspace` будет ошибка).
-- Перед изменением существующего файла (`write_file` / `edit_file` / `replace_lines`) копия сохраняется в `<workspace>/.agent_backup/<YYYYMMDD_HHMMSS>_<имя>`.
-- Папки `__pycache__`, `.git`, `.venv`, `.agent_backup` и файлы `*.pyc` скрыты из `list_files` / `search_in_files` (и из дерева UI). `.agent_backup` также в `.gitignore`.
-- Откат из Web-UI: `GET /api/backups` + `POST /api/rollback` — текущая версия перед восстановлением снова уходит в бэкап.
-- Для `.py` сразу после записи выполняется `ast.parse`; при `SyntaxError` инструмент возвращает номер строки и текст ошибки, чтобы модель исправила код без лишнего `run_python`.
-- Изменения файлов в UI показываются как **unified diff** (`difflib`), строки `+` зелёные, `-` красные.
+```bash
+.venv/bin/python agent.py --workspace ./sandbox --task "..."
+.venv/bin/python workflow.py --workspace /path/to/my-project --task "..."
+.venv/bin/python multi_agent.py --clean --task "..."   # ./sandbox only
+```
 
-## Автоопределение модели
+- `--clean` clears **only** the default `./sandbox` before a task (other `--workspace` values raise an error).
+- Before modifying an existing file (`write_file` / `edit_file` / `replace_lines`), a copy is saved to `<workspace>/.agent_backup/<YYYYMMDD_HHMMSS>_<name>`.
+- Directories `__pycache__`, `.git`, `.venv`, `.agent_backup` and `*.pyc` files are hidden from `list_files` / `search_in_files` (and from the UI tree). `.agent_backup` is also in `.gitignore`.
+- Rollback from the Web-UI: `GET /api/backups` + `POST /api/rollback` — the current version is backed up again before restore.
+- For `.py` files, `ast.parse` runs right after write; on `SyntaxError` the tool returns the line number and message so the model can fix the code without an extra `run_python`.
+- File changes in the UI are shown as a **unified diff** (`difflib`), with `+` lines green and `-` lines red.
 
-Хардкода имени модели нет. Если `--model` / `LLM_MODEL` не заданы, берётся первая чат-модель через `client.models.list()` (`get_active_model` в `llm.py`).
+## Model auto-detection
+
+There is no hardcoded model name. If `--model` / `LLM_MODEL` are unset, the first chat model from `client.models.list()` is used (`get_active_model` in `llm.py`).
 
 ```powershell
-# автоопределение
+# auto-detect
 .\.venv\Scripts\python.exe agent.py --task "..."
 
-# явно
-.\.venv\Scripts\python.exe agent.py --model "твоя-модель" --task "..."
+# explicit
+.\.venv\Scripts\python.exe agent.py --model "your-model" --task "..."
+```
+
+```bash
+# auto-detect
+.venv/bin/python agent.py --task "..."
+
+# explicit
+.venv/bin/python agent.py --model "your-model" --task "..."
 ```
 
 ## 1. Workflow (`workflow.py`)
 
-Детерминированный Evaluator-Optimizer: генератор пишет `solution.py` → запуск → критик правит через `replace_lines` / `edit_file` (до 3 циклов).
+Deterministic Evaluator-Optimizer: the generator writes `solution.py` → run → the critic edits via `replace_lines` / `edit_file` (up to 3 cycles).
 
 ```powershell
-.\.venv\Scripts\python.exe workflow.py --task "Напиши скрипт, который считает сумму чисел от 1 до 100 и печатает результат"
+.\.venv\Scripts\python.exe workflow.py --task "Write a script that sums numbers from 1 to 100 and prints the result"
 ```
 
-Опции: `--model`, `--workspace`, `--clean`, `--base-url`, `--api-key`.
+```bash
+.venv/bin/python workflow.py --task "Write a script that sums numbers from 1 to 100 and prints the result"
+```
+
+Options: `--model`, `--workspace`, `--clean`, `--base-url`, `--api-key`.
 
 ## 2. Agent (`agent.py`)
 
-Автономный ReAct-агент со всеми 10 инструментами. Перед каждым запросом к LLM сжимает старые `role=tool` (кроме 3 свежих) до 250 символов; при повторном идентичном ошибочном вызове тула добавляет предупреждение; печатает `prompt_tokens` / `completion_tokens`, если шлюз их вернул.
+Autonomous ReAct agent with all 10 tools. Before each LLM request it compresses older `role=tool` messages (keeping the latest 3) to 250 characters; on a repeated identical failing tool call it injects a warning; prints `prompt_tokens` / `completion_tokens` when the gateway provides them.
 
-Если цикл упёрся в `max_steps` и последний шаг был вызовом инструмента, агент делает **один** завершающий `chat_completion` **без** `tools`, чтобы сформулировать итоговый отчёт пользователю.
+If the loop hits `max_steps` and the last step was a tool call, the agent makes **one** final `chat_completion` **without** `tools` to produce a user-facing summary.
 
 ```powershell
-.\.venv\Scripts\python.exe agent.py --task "Создай hello.py, который печатает Hello, agents! и запусти его" --max-steps 12
+.\.venv\Scripts\python.exe agent.py --task "Create hello.py that prints Hello, agents! and run it" --max-steps 12
 ```
 
-Опции: `--model`, `--max-steps`, `--workspace`, `--clean`, `--base-url`, `--api-key`.
+```bash
+.venv/bin/python agent.py --task "Create hello.py that prints Hello, agents! and run it" --max-steps 12
+```
 
-В Web-UI история `messages` сеанса Agent сохраняется: следующая задача идёт как follow-up; кнопка **Новый сеанс** (`POST /api/session/reset`) сбрасывает контекст.
+Options: `--model`, `--max-steps`, `--workspace`, `--clean`, `--base-url`, `--api-key`.
+
+In the Web-UI, Agent session `messages` history is preserved: the next task is a follow-up; **New session** (`POST /api/session/reset`) clears context.
 
 ## 3. Multi-Agent (`multi_agent.py`)
 
-Три специалиста с разными системными промптами и урезанными тулами (до 2 циклов Кодер↔Ревьюер):
+Three specialists with distinct system prompts and restricted tools (up to 2 Coder↔Reviewer cycles):
 
-1. **Архитектор** — план/ТЗ в `plan.md` (`list_files`, `read_file`, `get_file_outline`, `write_file`, `replace_lines`)
-2. **Кодер** — код по плану (`write_file` / `replace_lines` / `edit_file` + `run_python`)
-3. **Ревьюер** — читает код, пишет `test_solution.py`, гоняет тесты; при падении возвращает `BUG_REPORT:` Кодеру
+1. **Architect** — plan/spec in `plan.md` (`list_files`, `read_file`, `get_file_outline`, `write_file`, `replace_lines`)
+2. **Coder** — implement from the plan (`write_file` / `replace_lines` / `edit_file` + `run_python`)
+3. **Reviewer** — reads code, writes `test_solution.py`, runs tests; on failure returns `BUG_REPORT:` to the Coder
 
 ```powershell
-.\.venv\Scripts\python.exe multi_agent.py --task "Напиши функцию is_palindrome(s) и скрипт, который проверяет несколько строк" --max-steps 10
+.\.venv\Scripts\python.exe multi_agent.py --task "Write is_palindrome(s) and a script that checks several strings" --max-steps 10
 ```
 
-Опции: `--model`, `--max-steps`, `--workspace`, `--clean`, `--base-url`, `--api-key`.
+```bash
+.venv/bin/python multi_agent.py --task "Write is_palindrome(s) and a script that checks several strings" --max-steps 10
+```
 
-## Инструменты (10 шт., workspace)
+Options: `--model`, `--max-steps`, `--workspace`, `--clean`, `--base-url`, `--api-key`.
 
-Все пути ограничены активной рабочей директорией (`Path.resolve()` + проверка границ):
+## Tools (10, workspace-scoped)
 
-| Инструмент | Описание |
-|------------|----------|
-| `list_files` | Список файлов workspace (без `__pycache__` / `.git` / `.venv` / `.agent_backup` / `*.pyc`) |
-| `read_file` | Чтение с нумерацией строк и заголовком `=== file (строки a-b из N) ===` |
-| `get_file_outline` | Outline `.py` через `ast`: классы, функции, номера строк |
-| `write_file` | Создание / перезапись + бэкап + `ast.parse` для `.py` |
-| `edit_file` | Точечная замена уникального `old_text` (+ бэкап / синтаксис) |
-| `replace_lines` | Замена диапазона строк по номерам (+ бэкап / синтаксис) |
-| `search_in_files` | Поиск подстроки по текстовым файлам (те же исключения, что у `list_files`) |
-| `run_python` | Запуск `.py` (таймаут 15 сек) → JSON returncode/stdout/stderr |
-| `pip_install` | Установка пакета через текущий pip (безопасные имена) |
-| `sqlite_query` | Read-only: URI `?mode=ro`, только один `SELECT`/`PRAGMA` без `;` |
+All paths are confined to the active working directory (`Path.resolve()` + boundary checks):
 
-## API Web-UI (дополнительно)
+| Tool | Description |
+|------|-------------|
+| `list_files` | List workspace files (excludes `__pycache__` / `.git` / `.venv` / `.agent_backup` / `*.pyc`) |
+| `read_file` | Read with line numbers and header `=== file (lines a-b of N) ===` |
+| `get_file_outline` | `.py` outline via `ast`: classes, functions, line numbers |
+| `write_file` | Create / overwrite + backup + `ast.parse` for `.py` |
+| `edit_file` | Unique `old_text` replacement (+ backup / syntax check) |
+| `replace_lines` | Replace a line range by numbers (+ backup / syntax check) |
+| `search_in_files` | Substring search across text files (same exclusions as `list_files`) |
+| `run_python` | Run `.py` (15s timeout) → JSON returncode/stdout/stderr |
+| `pip_install` | Install a package via the current pip (safe names only) |
+| `sqlite_query` | Read-only: URI `?mode=ro`, single `SELECT`/`PRAGMA` without `;` |
 
-| Метод | Путь | Назначение |
-|-------|------|------------|
-| `GET` | `/api/backups` | Список файлов в `<workspace>/.agent_backup/` |
-| `POST` | `/api/rollback` | Восстановить выбранный бэкап (тело: `{"backup": "…"}`) |
-| `GET` | `/api/session` | Статус follow-up сеанса Agent |
-| `POST` | `/api/session/reset` | Очистить историю `messages` |
+## Web-UI API (extra)
 
-## Примеры запуска
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/backups` | List files in `<workspace>/.agent_backup/` |
+| `POST` | `/api/rollback` | Restore a selected backup (body: `{"backup": "…"}`) |
+| `GET` | `/api/session` | Agent follow-up session status |
+| `POST` | `/api/session/reset` | Clear `messages` history |
+
+## Example commands
 
 ```powershell
 # Web-UI
@@ -194,13 +267,30 @@ docker run --rm -p 8080:8080 --add-host=host.docker.internal:host-gateway -e LLM
 .\.venv\Scripts\python.exe ui.py --no-browser
 
 # Workflow
-.\.venv\Scripts\python.exe workflow.py --clean --task "FizzBuzz от 1 до 20"
+.\.venv\Scripts\python.exe workflow.py --clean --task "FizzBuzz from 1 to 20"
 
-# ReAct-агент
-.\.venv\Scripts\python.exe agent.py --workspace ./sandbox --task "Найди все .py и кратко опиши" --max-steps 8
+# ReAct agent
+.\.venv\Scripts\python.exe agent.py --workspace ./sandbox --task "Find all .py files and summarize briefly" --max-steps 8
 
-# Мультиагент
-.\.venv\Scripts\python.exe multi_agent.py --task "Реализуй калькулятор: + - * / с CLI-аргументами"
+# Multi-agent
+.\.venv\Scripts\python.exe multi_agent.py --task "Implement a calculator: + - * / with CLI args"
+
+# Docker
+docker compose up --build
+```
+
+```bash
+# Web-UI
+.venv/bin/python ui.py --no-browser
+
+# Workflow
+.venv/bin/python workflow.py --clean --task "FizzBuzz from 1 to 20"
+
+# ReAct agent
+.venv/bin/python agent.py --workspace ./sandbox --task "Find all .py files and summarize briefly" --max-steps 8
+
+# Multi-agent
+.venv/bin/python multi_agent.py --task "Implement a calculator: + - * / with CLI args"
 
 # Docker
 docker compose up --build
