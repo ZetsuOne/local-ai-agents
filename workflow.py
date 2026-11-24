@@ -8,6 +8,7 @@ import re
 import sys
 
 import events
+from agent import apply_cli_workspace, get_workspace, run_command, write_file
 from llm import (
     DEFAULT_API_KEY,
     DEFAULT_BASE_URL,
@@ -15,14 +16,6 @@ from llm import (
     log_token_usage,
     make_client,
     resolve_model,
-)
-from tools import (
-    apply_cli_workspace,
-    edit_file,
-    get_workspace,
-    replace_lines,
-    run_python,
-    write_file,
 )
 
 SCRIPT_NAME = "solution.py"
@@ -55,27 +48,11 @@ def _extract_json(text: str) -> dict:
     """Достать JSON-объект из ответа критика."""
     m = re.search(r"\{.*\}", text, re.DOTALL)
     if not m:
-        return {
-            "ok": False,
-            "reason": "критик не вернул JSON",
-            "start_line": 0,
-            "end_line": 0,
-            "new_text": "",
-            "old_text": "",
-            "new_text_edit": "",
-        }
+        return {"ok": False, "reason": "критик не вернул JSON", "fixed_code": ""}
     try:
         return json.loads(m.group(0))
     except json.JSONDecodeError:
-        return {
-            "ok": False,
-            "reason": "невалидный JSON от критика",
-            "start_line": 0,
-            "end_line": 0,
-            "new_text": "",
-            "old_text": "",
-            "new_text_edit": "",
-        }
+        return {"ok": False, "reason": "невалидный JSON от критика", "fixed_code": ""}
 
 
 def step_generate(client, model: str, task: str) -> str:
@@ -104,13 +81,15 @@ def step_generate(client, model: str, task: str) -> str:
 def step_run() -> dict:
     print("\n=== Шаг 2: Запуск ===")
     events.emit("step", step=2, label="Запуск")
-    raw = run_python(SCRIPT_NAME)
+    raw = run_command(f"python {SCRIPT_NAME}")
     data = json.loads(raw)
     print(f"  returncode: {data.get('returncode')}")
     if data.get("stdout"):
         print(f"  stdout:\n{data['stdout'][:800]}")
     if data.get("stderr"):
         print(f"  stderr:\n{data['stderr'][:800]}")
+    if data.get("error"):
+        print(f"  error: {data['error']}")
     return data
 
 
@@ -124,13 +103,9 @@ def step_critique(client, model: str, task: str, code: str, run_result: dict) ->
                 "Ты критик кода в цикле Evaluator-Optimizer. "
                 "Проанализируй код и результат запуска относительно задачи. "
                 "Ответь СТРОГО JSON-объектом без markdown:\n"
-                '{"ok": true/false, "reason": "...", '
-                '"start_line": N, "end_line": M, "new_text": "...", '
-                '"old_text": "...", "new_text_edit": "..."}\n'
-                "Если ok=true — багов нет, остальные поля пустые/0. "
-                "Если ok=false — предпочтительно укажи start_line/end_line и new_text "
-                "для replace_lines; либо old_text + new_text_edit для edit_file. "
-                "Номера строк — 1-based по текущему файлу."
+                '{"ok": true/false, "reason": "...", "fixed_code": "..."}\n'
+                "Если ok=true — багов нет, fixed_code пустой. "
+                "Если ok=false — верни полный исправленный Python-код в fixed_code."
             ),
         },
         {
@@ -149,29 +124,16 @@ def step_critique(client, model: str, task: str, code: str, run_result: dict) ->
 
 
 def _apply_fix(verdict: dict, code: str, client, model: str, task: str) -> str:
-    """Применить правку: replace_lines → edit_file → полная перегенерация."""
-    start = int(verdict.get("start_line") or 0)
-    end = int(verdict.get("end_line") or 0)
-    new_text = verdict.get("new_text") or ""
-    if start >= 1 and end >= start and new_text:
-        edit_result = replace_lines(SCRIPT_NAME, start, end, new_text)
-        print(f"  replace_lines: {edit_result}")
-        events.emit("tool_result", result=edit_result)
-        if not edit_result.startswith("Ошибка"):
-            return (get_workspace() / SCRIPT_NAME).read_text(encoding="utf-8")
+    """Применить правку: fixed_code из критика → иначе полная перегенерация."""
+    fixed = (verdict.get("fixed_code") or "").strip()
+    if fixed:
+        code = _extract_code(fixed) if "```" in fixed else (fixed if fixed.endswith("\n") else fixed + "\n")
+        result = write_file(SCRIPT_NAME, code)
+        print(f"  write_file: {result}")
+        events.emit("tool_result", result=result)
+        return code
 
-    old_text = verdict.get("old_text") or ""
-    new_text_edit = verdict.get("new_text_edit") or verdict.get("new_text") or ""
-    if old_text:
-        edit_result = edit_file(SCRIPT_NAME, old_text, new_text_edit)
-        print(f"  edit_file: {edit_result}")
-        events.emit("tool_result", result=edit_result)
-        if not edit_result.startswith("Ошибка"):
-            return (get_workspace() / SCRIPT_NAME).read_text(encoding="utf-8")
-        print(f"  → fallback после неудачной правки: {edit_result}")
-    else:
-        print("  → критик не дал start_line/old_text — перегенерация")
-
+    print("  → критик не дал fixed_code — перегенерация")
     messages = [
         {
             "role": "system",

@@ -119,7 +119,40 @@
     .tokens {
       margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted);
       padding-top: 16px; white-space: nowrap;
+      display: flex; gap: 10px; align-items: center;
     }
+    .tok-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 8px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--bg);
+      color: var(--cyan); font-family: var(--mono); font-size: 11.5px;
+      min-width: 4.5em; justify-content: center;
+    }
+    .tok-badge.empty { color: var(--muted); }
+    .ctx-meter {
+      display: inline-flex; flex-direction: column; gap: 3px;
+      min-width: 140px; max-width: 200px;
+      font-family: var(--mono); font-size: 11px; color: var(--muted);
+    }
+    .ctx-meter .ctx-label { white-space: nowrap; }
+    .ctx-meter .ctx-track {
+      height: 6px; border-radius: 999px; background: var(--border-soft);
+      overflow: hidden; border: 1px solid var(--border);
+    }
+    .ctx-meter .ctx-fill {
+      height: 100%; width: 0%; border-radius: 999px;
+      background: var(--green); transition: width .25s ease, background .25s ease;
+    }
+    .ctx-meter.warn .ctx-fill { background: var(--yellow); }
+    .ctx-meter.crit .ctx-fill { background: var(--red); }
+    .ctx-meter.warn .ctx-label { color: var(--yellow); }
+    .ctx-meter.crit .ctx-label { color: var(--red); }
+    .role-models {
+      display: none; flex-wrap: wrap; gap: 10px; width: 100%;
+      padding: 4px 0 0;
+    }
+    .role-models.show { display: flex; }
+    .role-models .field { min-width: 140px; flex: 1; }
     button.ghost {
       background: transparent; border-color: var(--border); color: var(--muted);
       font-size: 12px; padding: 8px 12px;
@@ -188,6 +221,7 @@
       font-family: var(--mono); font-size: 12.5px; line-height: 1.45;
     }
     .card.thought .icon { color: var(--cyan); border-color: #39c5cf44; }
+    .card.reasoning .icon { color: var(--purple); border-color: #a371f744; }
     .card.tool .icon { color: var(--yellow); border-color: #d2992244; }
     .card.result .icon { color: var(--green); border-color: #3fb95044; }
     .card.error .icon { color: var(--red); border-color: #f8514944; }
@@ -197,6 +231,17 @@
       background: transparent; border-style: dashed; box-shadow: none;
       padding: 6px 10px; color: var(--muted); font-size: 12px;
     }
+    .card.reasoning details { margin: 0; }
+    .card.reasoning summary {
+      cursor: pointer; color: var(--muted); font-size: 12px;
+      list-style: none; user-select: none;
+    }
+    .card.reasoning summary::-webkit-details-marker { display: none; }
+    .card.reasoning summary::before {
+      content: "▸ "; color: var(--purple); font-family: var(--mono);
+    }
+    .card.reasoning details[open] summary::before { content: "▾ "; }
+    .card.reasoning .card-body { margin-top: 8px; color: var(--muted); }
 
     .diff-unified {
       margin-top: 8px; border-radius: 8px; border: 1px solid var(--border);
@@ -221,9 +266,32 @@
 
     /* Right panel */
     .side {
-      display: grid; grid-template-rows: 1fr 1.1fr minmax(120px, 0.7fr);
+      display: grid; grid-template-rows: minmax(110px, 0.55fr) 1fr 1.1fr minmax(100px, 0.65fr);
       min-height: 0; background: var(--bg-elev);
     }
+    .sessions {
+      flex: 1; overflow: auto; padding: 6px 8px;
+      font-family: var(--mono); font-size: 11.5px;
+    }
+    .session-item {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 4px; align-items: start;
+      padding: 6px 8px; border-radius: 6px;
+      border: 1px solid transparent; cursor: pointer;
+    }
+    .session-item:hover { background: var(--bg-soft); border-color: var(--border-soft); }
+    .session-item.active { background: var(--accent-dim); border-color: #58a6ff55; }
+    .session-meta { overflow: hidden; min-width: 0; }
+    .session-meta .title {
+      color: var(--text); display: block;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .session-meta .sub { color: var(--muted); font-size: 10.5px; }
+    .session-item button.del {
+      font-size: 11px; padding: 2px 6px; color: var(--red);
+      border-color: transparent; background: transparent;
+    }
+    .session-item button.del:hover { border-color: var(--red); background: var(--red-bg); }
     .panel {
       display: flex; flex-direction: column; min-height: 0;
       border-bottom: 1px solid var(--border);
@@ -292,6 +360,101 @@
       color: var(--muted); font-size: 12px;
       display: flex; gap: 16px; background: var(--bg-elev);
     }
+
+    .mention-wrap { position: relative; }
+    .mention-menu {
+      display: none; position: absolute; left: 0; right: 0; bottom: 100%;
+      max-height: 220px; overflow: auto; z-index: 40;
+      background: var(--bg-elev); border: 1px solid var(--border);
+      border-radius: 8px; box-shadow: var(--shadow); margin-bottom: 4px;
+    }
+    .mention-menu.open { display: block; }
+    .mention-item {
+      padding: 8px 12px; cursor: pointer; font-family: var(--mono); font-size: 12px;
+      display: flex; gap: 8px; align-items: baseline;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .mention-item:last-child { border-bottom: none; }
+    .mention-item.active, .mention-item:hover {
+      background: var(--accent-dim); color: var(--accent);
+    }
+    .mention-item .kind {
+      color: var(--muted); font-size: 10px; text-transform: uppercase;
+      font-family: var(--font); min-width: 52px;
+    }
+
+    .changes-bar {
+      display: none; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 8px 16px; border-bottom: 1px solid var(--border-soft);
+      background: linear-gradient(90deg, #1a2332 0%, var(--bg-elev) 60%);
+      font-size: 12.5px;
+    }
+    .changes-bar.show { display: flex; }
+    .changes-bar .stats { font-family: var(--mono); color: var(--muted); }
+    .changes-bar .stats .plus { color: var(--green); }
+    .changes-bar .stats .minus { color: var(--red); }
+    .changes-bar .files {
+      flex: 1; min-width: 120px; color: var(--muted);
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    }
+    .changes-bar button { font-size: 12px; padding: 4px 10px; }
+    .file-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--bg);
+      color: var(--accent); font-family: var(--mono); font-size: 11.5px;
+      cursor: pointer; max-width: 220px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .file-pill:hover { border-color: var(--accent); background: var(--accent-dim); }
+
+    /* Diff modal */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(1, 4, 9, .72); backdrop-filter: blur(4px);
+      align-items: center; justify-content: center; padding: 24px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      width: min(1100px, 100%); max-height: min(86vh, 900px);
+      background: var(--bg-elev); border: 1px solid var(--border);
+      border-radius: 12px; box-shadow: var(--shadow);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .modal-head {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+    }
+    .modal-head h2 {
+      margin: 0; font-size: 14px; font-weight: 600;
+      font-family: var(--mono); overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; flex: 1;
+    }
+    .modal-tabs { display: flex; gap: 6px; }
+    .modal-tabs button.active {
+      border-color: var(--accent); color: var(--accent); background: var(--accent-dim);
+    }
+    .modal-body { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+    .diff-split {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 0;
+    }
+    @media (max-width: 800px) {
+      .diff-split { grid-template-columns: 1fr; }
+    }
+    .diff-pane {
+      border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+      overflow: auto; max-height: 60vh;
+    }
+    .diff-pane .pane-title {
+      position: sticky; top: 0; padding: 6px 10px;
+      background: var(--bg-soft); border-bottom: 1px solid var(--border);
+      color: var(--muted); font-size: 11px; font-family: var(--mono);
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .diff-pane pre {
+      margin: 0; padding: 10px; white-space: pre-wrap; word-break: break-word;
+      font-family: var(--mono); font-size: 12px; line-height: 1.45;
+    }
   </style>
 </head>
 <body>
@@ -330,13 +493,38 @@
           <input type="checkbox" id="clean" />
           Очистить sandbox перед стартом
         </label>
+        <label class="check" title="Если правили .py и не гоняли pytest — автозапуск + один цикл самоисправления">
+          <input type="checkbox" id="autoTest" />
+          Auto-test (pytest)
+        </label>
         <div class="actions">
           <button class="primary" id="btnRun">Запустить</button>
           <button class="danger" id="btnStop" disabled>Остановить</button>
           <button class="ghost" id="btnNewSession" title="Очистить историю диалога Agent">Новый сеанс</button>
         </div>
         <div class="step-hud" id="stepHud" title="Прогресс шагов">Шаг — / —</div>
-        <div class="tokens" id="tokenHud">tokens: 0 / 0</div>
+        <div class="tokens">
+          <div class="ctx-meter" id="ctxMeter" title="Context window (prompt_tokens / LLM_CONTEXT_LIMIT)">
+            <span class="ctx-label" id="ctxLabel">ctx: — / —</span>
+            <div class="ctx-track"><div class="ctx-fill" id="ctxFill"></div></div>
+          </div>
+          <span id="tokenHud">tokens: 0 / 0</span>
+          <span class="tok-badge empty" id="tokSpeed" title="Скорость генерации">— tok/s</span>
+        </div>
+        <div class="role-models" id="roleModels">
+          <div class="field">
+            <label>Architect model</label>
+            <input type="text" id="modelArchitect" placeholder="(активная)" />
+          </div>
+          <div class="field">
+            <label>Coder model</label>
+            <input type="text" id="modelCoder" placeholder="(активная)" />
+          </div>
+          <div class="field">
+            <label>Reviewer model</label>
+            <input type="text" id="modelReviewer" placeholder="(активная)" />
+          </div>
+        </div>
       </div>
     </header>
 
@@ -348,10 +536,19 @@
             <div class="presets" id="presets">
               <button type="button" class="preset" data-preset="script">Скрипт + тесты</button>
               <button type="button" class="preset" data-preset="refactor">Рефакторинг файла</button>
-              <button type="button" class="preset" data-preset="sqlite">Анализ SQLite</button>
+              <button type="button" class="preset" data-preset="tests">Тесты / pytest</button>
             </div>
-            <textarea id="task" placeholder="Опиши задачу для агента…"></textarea>
+            <div class="mention-wrap">
+              <textarea id="task" placeholder="Опиши задачу… Набери @ для файлов, @repo_map, @git_diff"></textarea>
+              <div class="mention-menu" id="mentionMenu" role="listbox"></div>
+            </div>
           </div>
+        </div>
+        <div class="changes-bar" id="changesBar">
+          <strong>Session Changes</strong>
+          <span class="stats" id="changesStats">+0 / −0</span>
+          <span class="files" id="changesFiles" title=""></span>
+          <button type="button" class="danger" id="btnRevertSession" title="Откатить все файлы сессии к первому бэкапу">Revert All Session Changes</button>
         </div>
         <div class="feed" id="feed"></div>
         <div class="status-bar">
@@ -362,6 +559,15 @@
       </section>
 
       <aside class="side">
+        <div class="panel">
+          <div class="panel-head">
+            Сессии
+            <span class="muted" id="sessionCount">0</span>
+          </div>
+          <div class="sessions" id="sessionsList">
+            <div class="viewer-empty">нет сохранённых сессий</div>
+          </div>
+        </div>
         <div class="panel">
           <div class="panel-head">
             Файлы
@@ -391,6 +597,20 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="diffModal" role="dialog" aria-modal="true" aria-labelledby="diffModalTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="diffModalTitle">Diff</h2>
+        <div class="modal-tabs">
+          <button type="button" class="ghost active" id="diffTabUnified">Unified</button>
+          <button type="button" class="ghost" id="diffTabSplit">Side-by-side</button>
+        </div>
+        <button type="button" class="ghost" id="diffModalClose" title="Закрыть">✕</button>
+      </div>
+      <div class="modal-body" id="diffModalBody"></div>
+    </div>
+  </div>
+
   <script>
     const $ = (id) => document.getElementById(id);
     const feed = $("feed");
@@ -402,24 +622,39 @@
     let autoScroll = true;
     let promptTokens = 0;
     let completionTokens = 0;
+    let lastTokPerSec = null;
+    let lastPromptTokens = 0;
+    let contextLimit = 32768;
     let lastThoughtKey = null;
     let lastToolName = null;
     let currentStep = 0;
     let currentMaxSteps = 12;
     let sessionActive = false;
+    let activeSessionId = null;
+    let sessionChangeFiles = [];
+    let activeReasoningEl = null;
+    let diffModalData = null;
+    let diffModalMode = "unified";
+    let mentionTargets = [];
+    let mentionOpen = false;
+    let mentionIndex = 0;
+    let mentionFiltered = [];
+    let mentionQuery = "";
+    let mentionAtPos = -1;
+    let autoTestUserTouched = false;
     const runStart = { t: 0 };
 
     const PRESETS = {
       script:
         "Напиши Python-скрипт по задаче ниже и рядом файл тестов (test_*.py). " +
-        "Прогони тесты через run_python и кратко опиши результат.\n\nЗадача: ",
+        "Прогони тесты через run_command (pytest -q) и кратко опиши результат.\n\nЗадача: ",
       refactor:
-        "Открой указанный файл, кратко опиши структуру (get_file_outline / read_file), " +
-        "предложи и выполни аккуратный рефакторинг через replace_lines/edit_file, " +
-        "затем проверь run_python.\n\nФайл: ",
-      sqlite:
-        "Найди SQLite-базу в workspace, через sqlite_query изучи схему (PRAGMA table_info / SELECT) " +
-        "и кратко опиши таблицы, связи и пример данных.\n\nБаза (если известна): ",
+        "Открой указанный файл через read_file, кратко опиши структуру, " +
+        "предложи и выполни рефакторинг через write_file (полная перезапись), " +
+        "затем проверь через run_command (pytest / python script.py).\n\nФайл: @",
+      tests:
+        "Найди Python-файлы через list_files, прочитай нужные через read_file, " +
+        "добавь/обнови тесты (test_*.py) через write_file и прогони pytest -q.\n\nФокус: ",
     };
 
     function fmtTime(ts) {
@@ -506,6 +741,139 @@
     function updateTokens() {
       $("tokenHud").textContent =
         "tokens: " + promptTokens + " / " + completionTokens;
+      const badge = $("tokSpeed");
+      if (lastTokPerSec != null && !Number.isNaN(lastTokPerSec)) {
+        badge.textContent = lastTokPerSec.toFixed(1) + " tok/s";
+        badge.classList.remove("empty");
+      } else {
+        badge.textContent = "— tok/s";
+        badge.classList.add("empty");
+      }
+      updateContextMeter(lastPromptTokens, contextLimit);
+    }
+
+    function updateContextMeter(prompt, limit) {
+      const meter = $("ctxMeter");
+      const label = $("ctxLabel");
+      const fill = $("ctxFill");
+      if (!meter || !label || !fill) return;
+      const lim = Number(limit) > 0 ? Number(limit) : 32768;
+      contextLimit = lim;
+      const p = Math.max(0, Number(prompt) || 0);
+      lastPromptTokens = p;
+      const pct = Math.min(100, (p / lim) * 100);
+      label.textContent = "ctx: " + p + " / " + lim + " (" + pct.toFixed(0) + "%)";
+      fill.style.width = pct.toFixed(1) + "%";
+      meter.classList.remove("warn", "crit");
+      if (pct >= 90) meter.classList.add("crit");
+      else if (pct >= 75) meter.classList.add("warn");
+      meter.title =
+        "Context window usage: " + p + " / " + lim +
+        " (LLM_CONTEXT_LIMIT). Warning ≥75%, critical ≥90%.";
+    }
+
+    function upsertReasoningCard(content, opts) {
+      const active = !!(opts && opts.active);
+      const agent = (opts && opts.agent) || "";
+      const meta = (opts && opts.meta) || "";
+      if (activeReasoningEl && activeReasoningEl.isConnected) {
+        const body = activeReasoningEl.querySelector(".card-body");
+        const details = activeReasoningEl.querySelector("details");
+        const title = activeReasoningEl.querySelector(".card-title");
+        if (body) body.textContent = short(content, 6000);
+        if (title) {
+          title.textContent =
+            "Reasoning / Think" + (agent ? " · " + agent : "") +
+            (active ? " · live" : "");
+        }
+        if (details) details.open = !!active;
+        if (!active) activeReasoningEl = null;
+        if (autoScroll) feed.scrollTop = feed.scrollHeight;
+        return activeReasoningEl;
+      }
+      const el = document.createElement("div");
+      el.className = "card reasoning";
+      el.innerHTML =
+        '<div class="card-head">' +
+          '<div class="icon">🧠</div>' +
+          '<div class="card-title">Reasoning / Think' +
+            (agent ? " · " + esc(agent) : "") +
+            (active ? " · live" : "") +
+          "</div>" +
+          '<div class="card-meta">' + esc(meta || fmtTime()) + "</div>" +
+        "</div>" +
+        "<details" + (active ? " open" : "") + ">" +
+          "<summary>Показать рассуждение модели</summary>" +
+          '<div class="card-body">' + esc(short(content, 6000)) + "</div>" +
+        "</details>";
+      feed.appendChild(el);
+      if (autoScroll) feed.scrollTop = feed.scrollHeight;
+      activeReasoningEl = active ? el : null;
+      return el;
+    }
+
+    function closeDiffModal() {
+      $("diffModal").classList.remove("open");
+      diffModalData = null;
+    }
+
+    function renderDiffModal() {
+      const body = $("diffModalBody");
+      if (!diffModalData) {
+        body.innerHTML = '<div class="diff-empty">нет данных</div>';
+        return;
+      }
+      $("diffModalTitle").textContent =
+        "Diff · " + (diffModalData.filename || "?") +
+        (diffModalData.backup ? "  ←  " + diffModalData.backup : "  (new file)");
+      $("diffTabUnified").classList.toggle("active", diffModalMode === "unified");
+      $("diffTabSplit").classList.toggle("active", diffModalMode === "split");
+      if (diffModalMode === "split") {
+        body.innerHTML =
+          '<div class="diff-split">' +
+            '<div class="diff-pane">' +
+              '<div class="pane-title">Initial (session backup)</div>' +
+              "<pre>" + esc(diffModalData.before || "(empty)") + "</pre>" +
+            "</div>" +
+            '<div class="diff-pane">' +
+              '<div class="pane-title">Current</div>' +
+              "<pre>" + esc(diffModalData.after || "(empty / deleted)") + "</pre>" +
+            "</div>" +
+          "</div>";
+      } else {
+        body.innerHTML = makeUnifiedDiffHtml(diffModalData.diff || "");
+      }
+    }
+
+    async function openSessionFileDiff(filename) {
+      if (!activeSessionId || !filename) return;
+      try {
+        const url =
+          "/api/sessions/" + encodeURIComponent(activeSessionId) +
+          "/diff?path=" + encodeURIComponent(filename);
+        const r = await fetch(url);
+        const data = await r.json();
+        if (!data.ok) {
+          addCard({
+            cls: "error",
+            icon: "⚠",
+            title: "Diff",
+            body: data.error || "не удалось загрузить diff",
+          });
+          return;
+        }
+        diffModalData = data;
+        diffModalMode = "unified";
+        renderDiffModal();
+        $("diffModal").classList.add("open");
+      } catch (e) {
+        addCard({ cls: "error", icon: "⚠", title: "Diff", body: String(e) });
+      }
+    }
+
+    function toggleRoleModels() {
+      const on = $("mode").value === "multi_agent";
+      $("roleModels").classList.toggle("show", on);
     }
 
     function setRunning(on) {
@@ -518,6 +886,11 @@
 
     function updateSessionHint(info) {
       if (info && typeof info.active === "boolean") sessionActive = info.active;
+      if (info && info.session_id) activeSessionId = info.session_id;
+      if (info && info.tokens_per_sec != null) {
+        lastTokPerSec = Number(info.tokens_per_sec);
+        updateTokens();
+      }
       const hint = $("sessionHint");
       const btn = $("btnNewSession");
       if (sessionActive) {
@@ -527,6 +900,110 @@
       } else {
         hint.textContent = "";
         btn.classList.remove("active-session");
+      }
+      markActiveSession();
+    }
+
+    function markActiveSession() {
+      const list = $("sessionsList");
+      if (!list) return;
+      [...list.querySelectorAll(".session-item")].forEach((el) => {
+        el.classList.toggle("active", el.dataset.id === activeSessionId);
+      });
+    }
+
+    function fmtSessionTime(iso) {
+      if (!iso) return "";
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString("ru-RU", { hour12: false });
+      } catch (_) {
+        return iso;
+      }
+    }
+
+    async function refreshSessions() {
+      try {
+        const r = await fetch("/api/sessions");
+        const data = await r.json();
+        const list = data.sessions || [];
+        $("sessionCount").textContent = String(list.length);
+        const el = $("sessionsList");
+        el.innerHTML = "";
+        if (!list.length) {
+          el.innerHTML = '<div class="viewer-empty">нет сохранённых сессий</div>';
+          return;
+        }
+        for (const s of list) {
+          const row = document.createElement("div");
+          row.className = "session-item" + (s.session_id === activeSessionId ? " active" : "");
+          row.dataset.id = s.session_id;
+          const meta = document.createElement("div");
+          meta.className = "session-meta";
+          meta.innerHTML =
+            '<span class="title" title="' + esc(s.title || "") + '">' + esc(s.title || "Untitled") + "</span>" +
+            '<span class="sub">' + esc(s.mode || "") +
+            " · " + (s.message_count || 0) + " msg · " +
+            esc(fmtSessionTime(s.updated_at)) + "</span>";
+          meta.onclick = () => loadSession(s.session_id);
+          const del = document.createElement("button");
+          del.className = "del";
+          del.textContent = "×";
+          del.title = "Удалить сессию";
+          del.onclick = (e) => {
+            e.stopPropagation();
+            deleteSession(s.session_id);
+          };
+          row.appendChild(meta);
+          row.appendChild(del);
+          el.appendChild(row);
+        }
+      } catch (_) {
+        $("sessionsList").innerHTML = '<div class="viewer-empty">ошибка загрузки</div>';
+      }
+    }
+
+    async function loadSession(id) {
+      if (!id) return;
+      try {
+        const r = await fetch("/api/sessions/" + encodeURIComponent(id) + "/load", {
+          method: "POST",
+        });
+        const data = await r.json();
+        if (!data.ok) {
+          addCard({ cls: "error", icon: "⚠", title: "Сессия", body: data.error || "не найдена" });
+          return;
+        }
+        activeSessionId = id;
+        updateSessionHint(data);
+        if (data.changes) updateChangesBar(data.changes);
+        addCard({
+          cls: "step",
+          title: "↩ Загружена сессия · " + short(data.title || id, 80),
+        });
+        markActiveSession();
+      } catch (e) {
+        addCard({ cls: "error", icon: "⚠", title: "Сессия", body: String(e) });
+      }
+    }
+
+    async function deleteSession(id) {
+      if (!id) return;
+      if (!confirm("Удалить сохранённую сессию?")) return;
+      try {
+        const r = await fetch("/api/sessions/" + encodeURIComponent(id), {
+          method: "DELETE",
+        });
+        const data = await r.json();
+        if (!data.ok) {
+          addCard({ cls: "error", icon: "⚠", title: "Сессия", body: data.error || "ошибка" });
+          return;
+        }
+        if (activeSessionId === id) activeSessionId = null;
+        refreshSessions();
+        refreshSession();
+      } catch (e) {
+        addCard({ cls: "error", icon: "⚠", title: "Сессия", body: String(e) });
       }
     }
 
@@ -549,6 +1026,119 @@
       }
     }
 
+    function updateChangesBar(changes) {
+      const bar = $("changesBar");
+      const filesEl = $("changesFiles");
+      if (!changes || !changes.file_count) {
+        bar.classList.remove("show");
+        $("changesStats").innerHTML = '<span class="plus">+0</span> / <span class="minus">−0</span>';
+        filesEl.innerHTML = "";
+        sessionChangeFiles = [];
+        return;
+      }
+      bar.classList.add("show");
+      const added = changes.added || 0;
+      const removed = changes.removed || 0;
+      $("changesStats").innerHTML =
+        '<span class="plus">+' + added + "</span> / <span class=\"minus\">−" + removed + "</span>";
+      sessionChangeFiles = (changes.files || []).map((f) => f.filename).filter(Boolean);
+      filesEl.innerHTML = "";
+      sessionChangeFiles.forEach((name) => {
+        const pill = document.createElement("button");
+        pill.type = "button";
+        pill.className = "file-pill";
+        pill.textContent = name;
+        pill.title = "Открыть diff: " + name;
+        pill.onclick = () => openSessionFileDiff(name);
+        filesEl.appendChild(pill);
+      });
+    }
+
+    function renderMentionMenu() {
+      const menu = $("mentionMenu");
+      if (!mentionOpen || !mentionFiltered.length) {
+        menu.classList.remove("open");
+        menu.innerHTML = "";
+        return;
+      }
+      menu.innerHTML = "";
+      mentionFiltered.forEach((t, i) => {
+        const el = document.createElement("div");
+        el.className = "mention-item" + (i === mentionIndex ? " active" : "");
+        el.setAttribute("role", "option");
+        el.innerHTML =
+          '<span class="kind">' + esc(t.kind || "file") + "</span>" +
+          "<span>" + esc(t.label || ("@" + t.id)) + "</span>";
+        el.onmousedown = (ev) => {
+          ev.preventDefault();
+          applyMention(i);
+        };
+        menu.appendChild(el);
+      });
+      menu.classList.add("open");
+      const active = menu.querySelector(".mention-item.active");
+      if (active) active.scrollIntoView({ block: "nearest" });
+    }
+
+    function closeMentionMenu() {
+      mentionOpen = false;
+      mentionFiltered = [];
+      mentionAtPos = -1;
+      renderMentionMenu();
+    }
+
+    function applyMention(idx) {
+      const ta = $("task");
+      const item = mentionFiltered[idx];
+      if (!item || mentionAtPos < 0) {
+        closeMentionMenu();
+        return;
+      }
+      const val = ta.value;
+      const cursor = ta.selectionStart;
+      const insert = item.label || ("@" + item.id);
+      const before = val.slice(0, mentionAtPos);
+      const after = val.slice(cursor);
+      ta.value = before + insert + (after.startsWith(" ") ? after : " " + after);
+      const pos = before.length + insert.length + 1;
+      ta.focus();
+      ta.setSelectionRange(pos, pos);
+      closeMentionMenu();
+    }
+
+    function updateMentionFromInput() {
+      const ta = $("task");
+      const pos = ta.selectionStart;
+      const before = ta.value.slice(0, pos);
+      const at = before.lastIndexOf("@");
+      if (at < 0) {
+        closeMentionMenu();
+        return;
+      }
+      const chBefore = at === 0 ? " " : before[at - 1];
+      if (chBefore && !/\s/.test(chBefore)) {
+        closeMentionMenu();
+        return;
+      }
+      const frag = before.slice(at + 1);
+      if (/[\s]/.test(frag)) {
+        closeMentionMenu();
+        return;
+      }
+      mentionAtPos = at;
+      mentionQuery = frag.toLowerCase();
+      mentionFiltered = mentionTargets
+        .filter((t) => {
+          const id = String(t.id || "").toLowerCase();
+          const label = String(t.label || "").toLowerCase();
+          return !mentionQuery || id.includes(mentionQuery) || label.includes(mentionQuery);
+        })
+        .slice(0, 40);
+      mentionIndex = 0;
+      mentionOpen = mentionFiltered.length > 0;
+      renderMentionMenu();
+    }
+
     async function refreshFiles() {
       try {
         const r = await fetch("/api/files");
@@ -556,6 +1146,10 @@
         const files = (data.files || []).filter((f) => !f.is_dir);
         $("fileCount").textContent = String(files.length);
         $("wsPath").textContent = data.workspace || "";
+        mentionTargets = data.mentions || [];
+        if (!autoTestUserTouched) {
+          $("autoTest").checked = !!data.has_tests;
+        }
         tree.innerHTML = "";
         if (!files.length) {
           tree.innerHTML = '<div class="viewer-empty">пусто</div>';
@@ -711,6 +1305,7 @@
           feed.innerHTML = "";
           promptTokens = 0;
           completionTokens = 0;
+          lastTokPerSec = null;
           lastThoughtKey = null;
         }
         runStart.t = Date.now();
@@ -720,10 +1315,33 @@
         updateTokens();
         updateStepHud(0, currentMaxSteps);
         setRunning(true);
+        let startTitle = (ev.follow_up ? "↩ Follow-up · " : "▶ ") +
+          (ev.mode || "run") + " · " + short(ev.task || "", 120);
+        if (ev.models) {
+          const m = ev.models;
+          startTitle += " · A/C/R: " +
+            short(m.architect || "?", 24) + " / " +
+            short(m.coder || "?", 24) + " / " +
+            short(m.reviewer || "?", 24);
+        }
+        addCard({ cls: "step", title: startTitle });
+        return;
+      }
+      if (t === "sessions_changed") {
+        refreshSessions();
+        return;
+      }
+      if (t === "session_changes") {
+        if (ev.session_id) activeSessionId = ev.session_id;
+        updateChangesBar(ev.changes || {});
+        return;
+      }
+      if (t === "auto_test" || t === "auto_test_start") {
         addCard({
-          cls: "step",
-          title: (ev.follow_up ? "↩ Follow-up · " : "▶ ") +
-            (ev.mode || "run") + " · " + short(ev.task || "", 120),
+          cls: ev.failed ? "error" : "step",
+          icon: "🧪",
+          title: t === "auto_test_start" ? "Auto-test: pytest…" : (ev.failed ? "Auto-test FAIL" : "Auto-test PASS"),
+          body: typeof ev.result === "string" ? short(ev.result, 1200) : (ev.cmd || ""),
         });
         return;
       }
@@ -733,9 +1351,12 @@
       }
       if (t === "step") {
         updateStepHud(ev.step, ev.max_steps || currentMaxSteps);
+        const speed = lastTokPerSec != null
+          ? " · " + lastTokPerSec.toFixed(1) + " tok/s"
+          : "";
         const label = ev.label || ("Шаг " + (ev.step || "?") +
           (ev.max_steps ? "/" + ev.max_steps : "") +
-          (ev.agent ? " · " + ev.agent : ""));
+          (ev.agent ? " · " + ev.agent : "") + speed);
         addCard({ cls: "step", title: "—— " + label + " ——" });
         return;
       }
@@ -746,10 +1367,23 @@
         });
         return;
       }
+      if (t === "reasoning") {
+        upsertReasoningCard(ev.content || "", {
+          active: !!ev.active,
+          agent: ev.agent || "",
+          meta,
+        });
+        return;
+      }
       if (t === "thought") {
         const key = (ev.agent || "") + "::" + String(ev.content || "").trim();
         if (key && key === lastThoughtKey) return;
         lastThoughtKey = key;
+        if (activeReasoningEl) {
+          const details = activeReasoningEl.querySelector("details");
+          if (details) details.open = false;
+          activeReasoningEl = null;
+        }
         addCard({
           cls: "thought",
           icon: "💭",
@@ -771,8 +1405,8 @@
         return;
       }
       if (t === "tool_result") {
-        // run_python уже отрисован красивой карточкой — не дублируем сырой JSON
-        if (lastToolName === "run_python") {
+        // run_command уже отрисован отдельной карточкой
+        if (lastToolName === "run_command") {
           lastToolName = null;
           return;
         }
@@ -804,16 +1438,19 @@
         refreshBackups();
         return;
       }
-      if (t === "run_python") {
+      if (t === "run_command") {
         const res = ev.result || {};
         const ok = res.returncode === 0;
         addCard({
           cls: ok ? "result" : "error",
-          icon: ok ? "▶️" : "💥",
-          title: "run_python · " + (ev.filename || "") + " → " + res.returncode,
+          icon: ok ? "🧪" : "💥",
+          title: "run_command · " + short(ev.cmd || res.cmd || "", 60) +
+            " → " + res.returncode +
+            (res.duration_ms != null ? " (" + res.duration_ms + "ms)" : ""),
           body: short(
             (res.stdout ? "stdout:\n" + res.stdout + "\n" : "") +
-            (res.stderr ? "stderr:\n" + res.stderr : ""),
+            (res.stderr ? "stderr:\n" + res.stderr : "") +
+            (res.error ? "\nerror: " + res.error : ""),
             3000
           ),
           meta,
@@ -823,20 +1460,41 @@
       if (t === "tokens") {
         if (ev.total_prompt != null) promptTokens = ev.total_prompt;
         if (ev.total_completion != null) completionTokens = ev.total_completion;
+        if (ev.tokens_per_sec != null) lastTokPerSec = Number(ev.tokens_per_sec);
+        if (ev.prompt_tokens != null) lastPromptTokens = Number(ev.prompt_tokens);
+        if (ev.context_limit != null) contextLimit = Number(ev.context_limit);
         updateTokens();
+        const speed =
+          ev.tokens_per_sec != null
+            ? ", " + Number(ev.tokens_per_sec).toFixed(1) + " tok/s"
+            : (ev.elapsed_sec != null ? ", " + ev.elapsed_sec + "s" : "");
+        const ctx =
+          ev.prompt_tokens != null
+            ? "  |  ctx " + ev.prompt_tokens + "/" + (ev.context_limit || contextLimit) +
+              (ev.context_pct != null ? " (" + ev.context_pct + "%)" : "")
+            : "";
         addCard({
           cls: "tokens",
           icon: "Σ",
-          title: "Tokens",
+          title: "Tokens" + (ev.tokens_per_sec != null
+            ? " · " + Number(ev.tokens_per_sec).toFixed(1) + " tok/s"
+            : ""),
           body:
             "prompt +" + (ev.prompt_tokens ?? 0) +
             ", completion +" + (ev.completion_tokens ?? 0) +
-            "  |  total " + promptTokens + " / " + completionTokens,
+            speed +
+            "  |  total " + promptTokens + " / " + completionTokens +
+            ctx,
           meta,
         });
         return;
       }
       if (t === "final") {
+        if (activeReasoningEl) {
+          const details = activeReasoningEl.querySelector("details");
+          if (details) details.open = false;
+          activeReasoningEl = null;
+        }
         addCard({
           cls: "final",
           icon: "🏁",
@@ -914,6 +1572,64 @@
       ta.setSelectionRange(pos, pos);
     });
 
+    $("autoTest").addEventListener("change", () => {
+      autoTestUserTouched = true;
+    });
+
+    $("task").addEventListener("input", updateMentionFromInput);
+    $("task").addEventListener("keydown", (e) => {
+      if (!mentionOpen) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        mentionIndex = (mentionIndex + 1) % mentionFiltered.length;
+        renderMentionMenu();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        mentionIndex = (mentionIndex - 1 + mentionFiltered.length) % mentionFiltered.length;
+        renderMentionMenu();
+      } else if (e.key === "Enter" || e.key === "Tab") {
+        if (mentionFiltered.length) {
+          e.preventDefault();
+          applyMention(mentionIndex);
+        }
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        closeMentionMenu();
+      }
+    });
+    $("task").addEventListener("blur", () => {
+      setTimeout(closeMentionMenu, 150);
+    });
+
+    $("btnRevertSession").onclick = async () => {
+      if (!activeSessionId) {
+        addCard({ cls: "error", icon: "⚠", title: "Revert", body: "Нет активной сессии" });
+        return;
+      }
+      if (!confirm("Откатить все изменения этой сессии к первому бэкапу каждого файла?")) return;
+      try {
+        const r = await fetch(
+          "/api/sessions/" + encodeURIComponent(activeSessionId) + "/revert",
+          { method: "POST" }
+        );
+        const data = await r.json();
+        if (!data.ok && !(data.reverted && data.reverted.length)) {
+          addCard({ cls: "error", icon: "⚠", title: "Revert", body: data.error || data.message || "ошибка" });
+          return;
+        }
+        addCard({
+          cls: "step",
+          title: "↩ Revert All Session Changes",
+          body: data.message || ("откат " + (data.reverted || []).length + " файл(ов)"),
+        });
+        updateChangesBar({ file_count: 0, added: 0, removed: 0, files: [] });
+        refreshFiles();
+        refreshBackups();
+      } catch (e) {
+        addCard({ cls: "error", icon: "⚠", title: "Revert", body: String(e) });
+      }
+    };
+
     $("btnRun").onclick = async () => {
       const task = $("task").value.trim();
       if (!task) {
@@ -928,9 +1644,18 @@
         task,
         workspace: $("workspace").value.trim() || "./sandbox",
         clean: $("clean").checked,
+        auto_test: $("autoTest").checked,
         max_steps: maxSteps,
         base_url: getBaseUrl(),
       };
+      if (payload.mode === "multi_agent") {
+        const ma = ($("modelArchitect").value || "").trim();
+        const mc = ($("modelCoder").value || "").trim();
+        const mr = ($("modelReviewer").value || "").trim();
+        if (ma) payload.model_architect = ma;
+        if (mc) payload.model_coder = mc;
+        if (mr) payload.model_reviewer = mr;
+      }
       setRunning(true);
       try {
         const r = await fetch("/api/run", {
@@ -955,15 +1680,37 @@
       try {
         const r = await fetch("/api/session/reset", { method: "POST" });
         const data = await r.json();
+        activeSessionId = null;
         updateSessionHint(data);
+        updateChangesBar(null);
         feed.innerHTML = "";
         addCard({ cls: "step", title: "■ Новый сеанс — история диалога очищена" });
+        refreshSessions();
       } catch (e) {
         addCard({ cls: "error", icon: "⚠", title: "Сеанс", body: String(e) });
       }
     };
 
+    $("mode").addEventListener("change", toggleRoleModels);
     $("baseUrl").addEventListener("change", () => refreshModel());
+
+    $("diffModalClose").onclick = closeDiffModal;
+    $("diffModal").addEventListener("click", (e) => {
+      if (e.target === $("diffModal")) closeDiffModal();
+    });
+    $("diffTabUnified").onclick = () => {
+      diffModalMode = "unified";
+      renderDiffModal();
+    };
+    $("diffTabSplit").onclick = () => {
+      diffModalMode = "split";
+      renderDiffModal();
+    };
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && $("diffModal").classList.contains("open")) {
+        closeDiffModal();
+      }
+    });
 
     $("btnStop").onclick = async () => {
       try {
@@ -988,10 +1735,25 @@
       autoScroll = nearBottom;
     });
 
+    async function refreshStatus() {
+      try {
+        const r = await fetch("/api/status");
+        const data = await r.json();
+        if (data.context_limit) contextLimit = Number(data.context_limit);
+        if (data.tokens && data.tokens.prompt != null) {
+          lastPromptTokens = Number(data.tokens.prompt) || lastPromptTokens;
+        }
+        updateContextMeter(lastPromptTokens, contextLimit);
+      } catch (_) {}
+    }
+
+    toggleRoleModels();
     refreshModel();
     refreshFiles();
     refreshBackups();
     refreshSession();
+    refreshSessions();
+    refreshStatus();
     connectSSE();
     setInterval(refreshModel, 15000);
   </script>

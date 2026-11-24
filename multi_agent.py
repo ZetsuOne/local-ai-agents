@@ -8,6 +8,13 @@ import sys
 from typing import Any
 
 import events
+from agent import (
+    CORE_TOOL_NAMES,
+    apply_cli_workspace,
+    execute_tool,
+    filter_tools_schema,
+    get_workspace,
+)
 from llm import (
     DEFAULT_API_KEY,
     DEFAULT_BASE_URL,
@@ -16,13 +23,10 @@ from llm import (
     compact_messages,
     log_token_usage,
     make_client,
+    normalize_tool_calls,
     resolve_model,
-)
-from tools import (
-    apply_cli_workspace,
-    execute_tool,
-    filter_tools_schema,
-    get_workspace,
+    split_think_content,
+    strip_tool_call_markup,
 )
 
 DEFAULT_MAX_STEPS = 10
@@ -41,67 +45,50 @@ MAGENTA = "\033[35m"
 RED = "\033[31m"
 BLUE = "\033[34m"
 
-ARCHITECT_TOOLS = {
-    "list_files",
-    "read_file",
-    "get_file_outline",
-    "write_file",
-    "replace_lines",
-}
-CODER_TOOLS = {
-    "list_files",
-    "read_file",
-    "get_file_outline",
-    "write_file",
-    "replace_lines",
-    "edit_file",
-    "run_python",
-    "pip_install",
-}
-REVIEWER_TOOLS = {
-    "list_files",
-    "read_file",
-    "get_file_outline",
-    "write_file",
-    "replace_lines",
-    "run_python",
-}
+# Все роли используют одни и те же 4 lean-инструмента
+ARCHITECT_TOOLS = set(CORE_TOOL_NAMES)
+CODER_TOOLS = set(CORE_TOOL_NAMES)
+REVIEWER_TOOLS = set(CORE_TOOL_NAMES)
 
 ARCHITECT_PROMPT = f"""Ты Архитектор в мультиагентной системе.
-Работай ТОЛЬКО в активном workspace. Твои инструменты: list_files, read_file, write_file, replace_lines.
+Работай ТОЛЬКО в активном workspace.
+Инструменты: list_files, read_file, write_file, run_command.
 
 Задача: проанализировать запрос пользователя и записать техническое задание в файл {PLAN_FILE}.
+Сначала list_files / read_file по нужным файлам — не читай всё подряд.
 В плане укажи:
 - цель и ограничения;
 - структуру файлов (минимум {SOLUTION_FILE});
 - публичный API / ожидаемый stdout;
 - крайние случаи для тестов.
 
-Не пиши production-код решения — только план/ТЗ в {PLAN_FILE}.
+Не пиши production-код решения — только план/ТЗ в {PLAN_FILE} через write_file.
 Когда план готов и записан — дай краткий финальный ответ без вызова тулов.
 """
 
 CODER_PROMPT = f"""Ты Кодер в мультиагентной системе.
-Работай ТОЛЬКО в активном workspace. Инструменты: list_files, read_file, write_file, replace_lines, edit_file, run_python, pip_install.
+Работай ТОЛЬКО в активном workspace.
+Инструменты: list_files, read_file, write_file, run_command.
 
 Правила:
 1. Сначала прочитай {PLAN_FILE}.
-2. Реализуй решение в {SOLUTION_FILE} (и доп. файлы по плану при необходимости).
-3. Для правок предпочитай replace_lines по номерам строк после read_file.
-4. Если инструмент записи вернул ⚠ SyntaxError — сразу исправь синтаксис.
-5. Обязательно прогони run_python на {SOLUTION_FILE}.
-6. Если пришёл баг-репорт от Ревьюера — исправь код и снова запусти.
-Когда код готов и проверен запуском — финальный ответ без тулов.
+2. Реализуй решение в {SOLUTION_FILE} (и доп. файлы по плану) через write_file (полная перезапись).
+3. Если write_file вернул ⚠ SyntaxError — сразу исправь синтаксис.
+4. Прогони скрипт: run_command `python {SOLUTION_FILE}`.
+5. Перед финалом проверь через run_command (`pytest -q` или `python -m pytest`), если есть тесты.
+6. Если пришёл баг-репорт от Ревьюера — исправь код (write_file) и снова запусти.
+Когда код готов и проверен — финальный ответ без тулов.
 """
 
 REVIEWER_PROMPT = f"""Ты Ревьюер-тестировщик в мультиагентной системе.
-Работай ТОЛЬКО в активном workspace. Инструменты: list_files, read_file, write_file, replace_lines, run_python.
+Работай ТОЛЬКО в активном workspace.
+Инструменты: list_files, read_file, write_file, run_command.
 
 Правила:
 1. Прочитай {PLAN_FILE} и {SOLUTION_FILE}.
 2. Напиши отдельный тестовый скрипт {TEST_FILE} с проверками крайних случаев
    (assert / явные raise при провале). Тесты должны импортировать или вызывать решение.
-3. Запусти {TEST_FILE} через run_python.
+3. Запусти тесты: run_command (`pytest -q` / `python -m pytest`) или `python {TEST_FILE}`.
 4. Если тесты упали — в ФИНАЛЬНОМ ответе начни строкой BUG_REPORT: и опиши баги для Кодера.
 5. Если тесты прошли — финальный ответ начни строкой PASS: и кратко резюмируй.
 Не правь {SOLUTION_FILE} сам — только тесты и отчёт.
@@ -170,22 +157,40 @@ def run_specialist(
 
         log_token_usage(resp)
         msg = resp.choices[0].message
-        tool_calls = msg.tool_calls or []
+        tool_calls = normalize_tool_calls(msg, known_names=allowed_tools)
         if not tool_calls:
-            # Не дублируем Thought + Final
-            final_text = (msg.content or "").strip() or "(пустой ответ)"
+            raw = (msg.content or "").strip() or "(пустой ответ)"
+            reasoning, visible = split_think_content(raw)
+            if reasoning:
+                print(f"{DIM}🧠 Reasoning:{RESET} {_short(reasoning, 400)}")
+                events.emit("reasoning", content=reasoning, active=False, agent=name)
+            final_text = visible or raw
             print(f"{GREEN}🏁 {name} done:{RESET} {_short(final_text, 500)}")
             events.emit("final", content=final_text, agent=name)
             return final_text
 
         if msg.content and msg.content.strip():
-            print(f"{CYAN}💭 Thought:{RESET} {_short(msg.content.strip(), 400)}")
-            events.emit("thought", content=msg.content.strip(), agent=name)
+            reasoning, visible = split_think_content(msg.content)
+            if reasoning:
+                print(f"{DIM}🧠 Reasoning:{RESET} {_short(reasoning, 400)}")
+                events.emit("reasoning", content=reasoning, active=True, agent=name)
+            thought = visible or msg.content.strip()
+            if not (msg.tool_calls or []):
+                thought = strip_tool_call_markup(thought) or thought
+            if thought:
+                print(f"{CYAN}💭 Thought:{RESET} {_short(thought, 400)}")
+                events.emit("thought", content=thought, agent=name)
+
+        assistant_content = msg.content or ""
+        _r, vis = split_think_content(assistant_content)
+        assistant_content = vis if vis else assistant_content
+        if not (msg.tool_calls or []):
+            assistant_content = strip_tool_call_markup(assistant_content)
 
         messages.append(
             {
                 "role": "assistant",
-                "content": msg.content or "",
+                "content": assistant_content,
                 "tool_calls": [
                     {
                         "id": tc.id,
@@ -238,17 +243,39 @@ def _is_bug_report(review_text: str) -> bool:
     return upper.startswith("BUG_REPORT:") or "BUG_REPORT" in upper[:40]
 
 
+def _resolve_role_model(
+    client: Any,
+    default_model: str,
+    override: str | None,
+) -> str:
+    if override and str(override).strip():
+        return resolve_model(client, str(override).strip())
+    return default_model
+
+
 def run_pipeline(
     task: str,
     model: str,
     base_url: str,
     api_key: str,
     max_steps: int,
+    *,
+    model_architect: str | None = None,
+    model_coder: str | None = None,
+    model_reviewer: str | None = None,
 ) -> int:
     client = make_client(base_url=base_url, api_key=api_key)
     ws = get_workspace()
+    arch_model = _resolve_role_model(client, model, model_architect)
+    coder_model = _resolve_role_model(client, model, model_coder)
+    reviewer_model = _resolve_role_model(client, model, model_reviewer)
+
     print(f"{BOLD}Multi-Agent Pipeline{RESET}")
     print(f"  model={model}")
+    if arch_model != model or coder_model != model or reviewer_model != model:
+        print(f"  architect_model={arch_model}")
+        print(f"  coder_model={coder_model}")
+        print(f"  reviewer_model={reviewer_model}")
     print(f"  max_steps/agent={max_steps}")
     print(f"  review_cycles≤{MAX_REVIEW_CYCLES}")
     print(f"  task={task}")
@@ -260,16 +287,20 @@ def run_pipeline(
         workspace=str(ws),
         task=task,
         max_steps=max_steps,
+        models={
+            "architect": arch_model,
+            "coder": coder_model,
+            "reviewer": reviewer_model,
+        },
     )
 
-    # 1) Архитектор
     arch_out = run_specialist(
         name="Архитектор",
         system_prompt=ARCHITECT_PROMPT,
         user_message=f"Задача пользователя:\n{task}",
         allowed_tools=ARCHITECT_TOOLS,
         client=client,
-        model=model,
+        model=arch_model,
         max_steps=max_steps,
     )
     if events.should_stop() or arch_out == "STOPPED":
@@ -292,7 +323,6 @@ def run_pipeline(
             return 130
         print(f"\n{BOLD}═══ Цикл разработка/ревью {cycle}/{MAX_REVIEW_CYCLES} ═══{RESET}")
 
-        # 2) Кодер
         coder_msg = (
             f"Исходная задача:\n{task}\n\n"
             f"Следуй плану в {PLAN_FILE}. Реализуй {SOLUTION_FILE}."
@@ -308,7 +338,7 @@ def run_pipeline(
             user_message=coder_msg,
             allowed_tools=CODER_TOOLS,
             client=client,
-            model=model,
+            model=coder_model,
             max_steps=max_steps,
         )
         if events.should_stop() or coder_out == "STOPPED":
@@ -320,7 +350,6 @@ def run_pipeline(
             events.emit("run_end", status="failed", code=1)
             return 1
 
-        # 3) Ревьюер
         review_out = run_specialist(
             name="Ревьюер",
             system_prompt=REVIEWER_PROMPT,
@@ -331,7 +360,7 @@ def run_pipeline(
             ),
             allowed_tools=REVIEWER_TOOLS,
             client=client,
-            model=model,
+            model=reviewer_model,
             max_steps=max_steps,
         )
         if events.should_stop() or review_out == "STOPPED":
@@ -351,7 +380,6 @@ def run_pipeline(
             print(f"{YELLOW}↻ Баг-репорт → Кодер (цикл {cycle}){RESET}")
             continue
 
-        # Неясный вердикт — считаем как баг-репорт, чтобы дать шанс доработке
         bug_report = f"BUG_REPORT: неясный вердикт ревьюера:\n{review_out}"
         print(f"{YELLOW}↻ Неясный вердикт → ещё одна итерация{RESET}")
 
@@ -370,6 +398,21 @@ def main() -> None:
         "--model",
         default=None,
         help="Имя модели в LM Studio (по умолчанию — первая загруженная чат-модель)",
+    )
+    parser.add_argument(
+        "--model-architect",
+        default=None,
+        help="Модель для Архитектора (по умолчанию = --model)",
+    )
+    parser.add_argument(
+        "--model-coder",
+        default=None,
+        help="Модель для Кодера (по умолчанию = --model)",
+    )
+    parser.add_argument(
+        "--model-reviewer",
+        default=None,
+        help="Модель для Ревьюера (по умолчанию = --model)",
     )
     parser.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
@@ -406,6 +449,9 @@ def main() -> None:
             base_url=args.base_url,
             api_key=args.api_key,
             max_steps=args.max_steps,
+            model_architect=args.model_architect,
+            model_coder=args.model_coder,
+            model_reviewer=args.model_reviewer,
         )
     )
 
